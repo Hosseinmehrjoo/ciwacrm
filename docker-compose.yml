@@ -1,0 +1,73 @@
+services:
+  db:
+    image: public.ecr.aws/docker/library/mariadb:11
+    environment:
+      MARIADB_DATABASE: suitecrm
+      MARIADB_USER: suitecrm
+      MARIADB_PASSWORD: ${SUITECRM_DB_PASSWORD:?set SUITECRM_DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?set MARIADB_ROOT_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  crm:
+    build: ./deploy/suitecrm
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SUITECRM_DB_HOST: db
+      SUITECRM_DB_NAME: suitecrm
+      SUITECRM_DB_USER: suitecrm
+      SUITECRM_DB_PASSWORD: ${SUITECRM_DB_PASSWORD:?set SUITECRM_DB_PASSWORD}
+      SUITECRM_ADMIN_USER: admin
+      SUITECRM_ADMIN_PASSWORD: ${SUITECRM_ADMIN_PASSWORD:?set SUITECRM_ADMIN_PASSWORD}
+      SUITECRM_PUBLIC_URL: ${SUITECRM_PUBLIC_URL:-http://localhost:8081}
+      SUITECRM_CLIENT_ID: ${SUITECRM_CLIENT_ID:?set SUITECRM_CLIENT_ID}
+      SUITECRM_CLIENT_SECRET: ${SUITECRM_CLIENT_SECRET:?set SUITECRM_CLIENT_SECRET}
+      CIWA_PUBLIC_URL: ${CIWA_PUBLIC_URL:-http://localhost:8443}
+      HOST_UID: ${HOST_UID:-1000}
+      HOST_GID: ${HOST_GID:-1000}
+    volumes:
+      - ./SuiteCRM:/var/www/html
+    ports:
+      - '8081:80'
+
+  integration:
+    profiles: ['container']
+    image: node:22-alpine
+    working_dir: /app
+    command: node server.mjs
+    depends_on:
+      - crm
+    environment:
+      PORT: 8787
+      SUITECRM_BASE_URL: http://crm
+      SUITECRM_CLIENT_ID: ${SUITECRM_CLIENT_ID:?set SUITECRM_CLIENT_ID}
+      SUITECRM_CLIENT_SECRET: ${SUITECRM_CLIENT_SECRET:?set SUITECRM_CLIENT_SECRET}
+    volumes:
+      - ./integration:/app
+    ports:
+      - '8787:8787'
+
+  frontend:
+    profiles: ['container']
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "corepack enable && corepack prepare pnpm@10.34.3 --activate && pnpm install && pnpm dev --host 0.0.0.0 --port 8443"
+    depends_on:
+      - integration
+    environment:
+      PORT: 8443
+      CIWA_INTEGRATION_URL: http://integration:8787
+    volumes:
+      - ./frontend:/app
+    ports:
+      - '8443:8443'
+
+volumes:
+  db_data:
