@@ -9,7 +9,9 @@ import {
 import { ApiError } from '../api/client'
 import { listModule, updateModuleRecord, type CrmRecord } from '../api/records'
 import { useSession } from '../auth/SessionProvider'
-import { moduleById, modules, optionLabel } from '../crm/modules'
+import { hostUsage, type HostUsage } from '../api/host'
+import { groupLabel, moduleById, modules, optionLabel } from '../crm/modules'
+import { SectionHelp } from '../help/SectionHelp'
 
 const salesData = [
   { date: '۱ شه', sales: 12000, opportunities: 8000, newCustomers: 3000 },
@@ -71,6 +73,8 @@ export function DashboardView({
   const [activities, setActivities] = useState<string[]>([])
   const [funnel, setFunnel] = useState<number[]>([48, 32, 18, 9])
   const [sampleDone, setSampleDone] = useState(sampleTasks.map((task) => task.done))
+  const [host, setHost] = useState<HostUsage | null>(null)
+  const now = useNow()
 
   useEffect(() => {
     if (session.demo) return
@@ -113,29 +117,55 @@ export function DashboardView({
     }
   }, [session.demo, session.logout])
 
+  useEffect(() => {
+    if (session.demo) return
+    let active = true
+    async function load() {
+      try {
+        const next = await hostUsage()
+        if (active) setHost(next)
+      } catch (caught) {
+        if (caught instanceof ApiError && caught.status === 401) void session.logout()
+      }
+    }
+    void load()
+    const timer = window.setInterval(() => void load(), 5000)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [session.demo, session.logout])
+
   const funnelMax = Math.max(...funnel, 1)
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="glass-card relative rounded-[28px] overflow-hidden" style={{ minHeight: 200, background: 'linear-gradient(135deg, rgba(232,121,249,0.35), rgba(99,102,241,0.28) 45%, rgba(37,99,235,0.38))' }}>
+    <div className="flex flex-col gap-4 sm:gap-5 min-w-0">
+      <div className="glass-card theme-banner relative rounded-[28px] overflow-hidden min-h-40 sm:min-h-[200px]">
         <div className="hero-blob absolute -top-16 -left-16 w-72 h-72 rounded-full opacity-50" style={{ background: 'radial-gradient(circle, #e879f9 0%, transparent 70%)' }} />
         <div className="hero-blob absolute -bottom-20 left-40 w-56 h-56 rounded-full opacity-40" style={{ background: 'radial-gradient(circle, #3b82f6 0%, transparent 70%)', animationDelay: '2s' }} />
-        <div className="hidden xl:block absolute left-64 top-8 rounded-2xl p-3 glass-chip">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full" style={{ background: 'linear-gradient(135deg, #e879f9, #3b82f6)' }} />
-            <div>
-              <p className="text-white text-xs font-semibold">سارا محمدی</p>
-              <p className="text-xs" style={{ color: '#e9d5ff' }}>مشتری جدید</p>
+        <div className="relative z-10 flex flex-col gap-6 p-5 sm:p-8 md:flex-row md:items-start md:justify-between min-h-40 sm:min-h-[200px]">
+          <div className="order-2 md:order-1 flex flex-col justify-center gap-3 min-w-0">
+            <div className="flex items-start gap-2">
+              <h1 className="text-xl sm:text-2xl font-extrabold text-white leading-normal">مدیریت ارتباطات، رشد کسب‌وکار</h1>
+              <SectionHelp topic="dashboard" tone="banner" />
+            </div>
+            <p className="text-sm text-white/80 leading-7 max-w-lg">تمام ابزارهای مورد نیاز شما برای مدیریت مشتریان، فروش و پشتیبانی در یک پلتفرم ساده و قدرتمند.</p>
+            <button type="button" className="btn-primary flex items-center gap-2 w-fit rounded-2xl px-5 py-2.5 text-sm font-semibold mt-1" onClick={onCreateContact}>
+              <Plus size={16} />
+              ایجاد مخاطب جدید
+            </button>
+          </div>
+          <div className="order-1 md:order-2 flex w-full min-w-0 flex-col items-end gap-3 md:w-[34rem] md:max-w-[58%] md:shrink-0">
+            <div className="text-left" dir="ltr">
+              <p className="text-4xl sm:text-5xl font-bold text-white leading-none tabular-nums">{formatTime(now)}</p>
+              <p className="text-base sm:text-lg text-white/80 mt-2">{formatDate(now)}</p>
+            </div>
+            <div className="grid w-full grid-cols-3 gap-2">
+              <UsageMeter label="پردازنده" percent={session.demo ? null : host?.cpu ?? null} detail={meterDetail(session.demo, host, 'cpu')} />
+              <UsageMeter label="رم" percent={session.demo ? null : host?.memory.percent ?? null} detail={meterDetail(session.demo, host, 'memory')} />
+              <UsageMeter label="هارد" percent={session.demo ? null : host?.disk.percent ?? null} detail={meterDetail(session.demo, host, 'disk')} />
             </div>
           </div>
-        </div>
-        <div className="relative z-10 flex flex-col justify-center h-full p-8 gap-3" style={{ minHeight: 200 }}>
-          <h1 className="text-2xl font-extrabold text-white leading-normal">مدیریت ارتباطات، رشد کسب‌وکار</h1>
-          <p className="text-sm text-white/80 leading-7 max-w-lg">تمام ابزارهای مورد نیاز شما برای مدیریت مشتریان، فروش و پشتیبانی در یک پلتفرم ساده و قدرتمند.</p>
-          <button type="button" className="btn-primary flex items-center gap-2 w-fit rounded-2xl px-5 py-2.5 text-sm font-semibold mt-1" onClick={onCreateContact}>
-            <Plus size={16} />
-            ایجاد مخاطب جدید
-          </button>
         </div>
       </div>
 
@@ -199,7 +229,7 @@ export function DashboardView({
             {(activities.length > 0 ? activities : sampleTasks.map((task) => task.title)).map((title) => (
               <div key={title} className="activity-item flex items-center gap-2 rounded-xl px-2 py-2">
                 <Phone size={14} className="text-emerald-600 shrink-0" />
-                <span className="text-xs text-slate-700 font-medium">{title}</span>
+                <span className="text-xs text-slate-700 font-medium min-w-0 truncate">{title}</span>
               </div>
             ))}
           </div>
@@ -212,7 +242,7 @@ export function DashboardView({
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3 min-w-0">
         <div className="glass-card rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-slate-800">وظایف امروز</h3>
@@ -233,16 +263,12 @@ export function DashboardView({
               <button
                 key={task.title}
                 type="button"
-                className="flex items-center gap-2 rounded-xl border px-2 py-2 text-right"
-                style={{ borderColor: sampleDone[index] ? 'rgba(167,139,250,0.45)' : 'rgba(255,255,255,0.14)', background: sampleDone[index] ? 'rgba(139,92,246,0.16)' : 'transparent' }}
+                className={`flex items-center gap-2 rounded-xl border px-2 py-2 text-right ${sampleDone[index] ? 'border-violet-300 bg-violet-500/10' : 'border-slate-200'}`}
                 onClick={() => setSampleDone((current) => current.map((done, item) => item === index ? !done : done))}
               >
                 {sampleDone[index] ? <CheckCircle2 size={16} className="text-emerald-600 shrink-0" /> : <Circle size={16} className="text-slate-300 shrink-0" />}
                 <span className={`text-xs flex-1 ${sampleDone[index] ? 'text-slate-400 line-through' : 'text-slate-700 font-medium'}`}>{task.title}</span>
-                <span className="text-xs px-1.5 py-0.5 rounded-lg" style={{
-                  background: task.priority === 'high' ? 'rgba(239,68,68,0.1)' : task.priority === 'medium' ? 'rgba(245,158,11,0.1)' : 'rgba(148,163,184,0.15)',
-                  color: task.priority === 'high' ? '#dc2626' : task.priority === 'medium' ? '#d97706' : '#64748b',
-                }}>
+                <span className={`text-xs px-1.5 py-0.5 rounded-lg ${task.priority === 'high' ? 'bg-red-50 text-red-700' : task.priority === 'medium' ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
                   {task.priority === 'high' ? 'بالا' : task.priority === 'medium' ? 'متوسط' : 'پایین'}
                 </span>
               </button>
@@ -321,6 +347,67 @@ export function DashboardView({
       </div>
     </div>
   )
+}
+
+function UsageMeter({ label, percent, detail }: { label: string; percent: number | null; detail: string }) {
+  const width = percent == null ? 0 : Math.min(100, Math.max(0, percent))
+  return (
+    <div className="rounded-2xl px-2.5 py-2 min-w-0" style={{ background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.28)' }}>
+      <div className="flex items-center justify-between gap-3 text-xs text-white">
+        <span>{label}</span>
+        <span className="tabular-nums">{percent == null ? '…' : `${percent.toLocaleString('fa-IR')}٪`}</span>
+      </div>
+      <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.28)' }}>
+        <div className="h-full rounded-full" style={{ width: `${width}%`, background: '#ffffff' }} />
+      </div>
+      <p className="mt-1 text-[11px] text-white/80">{detail}</p>
+    </div>
+  )
+}
+
+function useNow() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  return now
+}
+
+function formatTime(date: Date) {
+  return new Intl.DateTimeFormat('fa-IR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+    timeZone: 'Asia/Tehran',
+  }).format(date)
+}
+
+function formatDate(date: Date) {
+  const parts = new Intl.DateTimeFormat('fa-IR', {
+    calendar: 'persian',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Asia/Tehran',
+  }).formatToParts(date)
+  const pick = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || ''
+  return `${pick('weekday')} ${pick('day')} ${pick('month')} ${pick('year')}`
+}
+
+function meterDetail(demo: boolean, host: HostUsage | null, kind: 'cpu' | 'memory' | 'disk') {
+  if (demo) return 'در نمای نمونه نیست'
+  if (!host) return 'در حال خواندن'
+  if (kind === 'cpu') return 'همین رایانه'
+  const part = host[kind]
+  return `${formatBytes(part.used)} از ${formatBytes(part.total)}`
+}
+
+function formatBytes(bytes: number) {
+  const gigabytes = bytes / (1024 ** 3)
+  return `${gigabytes.toLocaleString('fa-IR', { maximumFractionDigits: 1, minimumFractionDigits: 1 })} گیگ`
 }
 
 function KpiCard({
@@ -404,7 +491,10 @@ export function SettingsView({ onOpen }: { onOpen: (id: string) => void }) {
   const session = useSession()
   return (
     <section className="glass-card rounded-2xl p-5 flex flex-col gap-4">
-      <h2 className="text-sm font-semibold text-slate-800">تنظیمات</h2>
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-slate-800">تنظیمات</h2>
+        <SectionHelp topic="settings" />
+      </div>
       <p className="text-sm text-slate-600 leading-7">
         نشست فعلی به کاربر {session.user?.fullName || 'کاربر'} وصل است. داده‌ها در هسته نگهداری می‌شوند.
       </p>
@@ -412,21 +502,10 @@ export function SettingsView({ onOpen }: { onOpen: (id: string) => void }) {
         {modules.map((module) => (
           <button key={module.id} type="button" className="rounded-2xl border border-slate-200 px-4 py-3 text-right text-sm text-slate-700" onClick={() => onOpen(module.id)}>
             <span className="font-medium">{module.label}</span>
-            <span className="block text-xs text-slate-500 mt-1">{module.suite}</span>
+            <span className="block text-xs text-slate-500 mt-1">{groupLabel[module.group] || module.group}</span>
           </button>
         ))}
       </div>
-    </section>
-  )
-}
-
-export function AiView() {
-  return (
-    <section className="glass-card rounded-2xl p-6">
-      <h2 className="text-sm font-semibold text-slate-800">هوش مصنوعی</h2>
-      <p className="text-sm text-slate-600 mt-3 leading-7">
-        هسته ماژول هوش مصنوعی ندارد. بخش‌های فروش، مخاطب، پشتیبانی و مالی با همین هسته همگام هستند.
-      </p>
     </section>
   )
 }

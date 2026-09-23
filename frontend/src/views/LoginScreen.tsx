@@ -23,9 +23,9 @@ export function LoginScreen() {
   }
 
   return (
-    <main className="vision-app min-h-screen grid place-items-center p-6">
-      <form onSubmit={onSubmit} className="glass-card w-full max-w-md rounded-[28px] p-8 flex flex-col gap-5">
-        <img src="/ciwa-brand.jpg" alt="ciwaCRM" className="w-40 h-40 mx-auto rounded-3xl object-cover" />
+    <main className="vision-app min-h-screen grid place-items-center p-4 sm:p-6">
+      <form onSubmit={onSubmit} className="glass-card w-full max-w-md rounded-[28px] p-5 sm:p-8 flex flex-col gap-5">
+        <img src="/ciwa-brand.jpg" alt="ciwaCRM" className="w-28 h-28 sm:w-40 sm:h-40 mx-auto rounded-3xl object-cover" />
         <div className="text-center">
           <h1 className="text-lg font-bold brand-text">ورود به CIWA CRM</h1>
           <p className="text-sm text-slate-400 mt-1">با حساب کاربری خود وارد شوید.</p>
@@ -71,7 +71,7 @@ export function LoginScreen() {
         </button>
 
         {session.offline && (
-          <button type="button" onClick={session.enterDemo} className="text-sm font-medium text-violet-200 hover:text-white">
+          <button type="button" onClick={session.enterDemo} className="text-sm font-medium text-violet-700">
             مشاهده نمای نمونه
           </button>
         )}

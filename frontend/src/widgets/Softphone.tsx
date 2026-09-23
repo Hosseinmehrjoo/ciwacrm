@@ -3,6 +3,7 @@ import {
   Delete, Grip, History, Mic, MicOff, Pause, Phone, PhoneForwarded,
   PhoneIncoming, PhoneOff, Play, Search, Settings, Square, UserRound, Users, Video, VideoOff, Voicemail, Volume2, VolumeX, X,
 } from 'lucide-react'
+import { SectionHelp } from '../help/SectionHelp'
 
 type Presence = 'available' | 'away' | 'busy' | 'dnd'
 type Tab = 'pad' | 'people' | 'history' | 'mail' | 'more'
@@ -220,7 +221,7 @@ export function Softphone({ open, onOpenChange }: { open: boolean, onOpenChange:
         type="button"
         aria-label="باز کردن تلفن"
         onClick={() => onOpenChange(true)}
-        className={`fixed bottom-6 left-6 z-40 w-14 h-14 rounded-full text-white shadow-lg grid place-items-center ${dockRinging ? 'phone-dock-ring' : ''}`}
+        className={`fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-40 w-14 h-14 rounded-full text-white shadow-lg grid place-items-center ${dockRinging ? 'phone-dock-ring' : ''}`}
         style={{ background: 'linear-gradient(135deg, #e879f9, #6366f1 55%, #3b82f6)' }}
       >
         {dockRinging ? <PhoneIncoming size={22} /> : <Phone size={22} />}
@@ -235,13 +236,16 @@ export function Softphone({ open, onOpenChange }: { open: boolean, onOpenChange:
 
   return (
     <section
-      className="glass-card fixed bottom-6 left-6 z-40 w-[22.5rem] max-w-[calc(100vw-3rem)] max-h-[calc(100vh-3rem)] rounded-[28px] flex flex-col overflow-hidden"
+      className="glass-card fixed bottom-3 left-3 right-3 z-40 w-auto max-h-[calc(100vh-1.5rem)] rounded-[28px] flex flex-col overflow-hidden sm:bottom-6 sm:left-6 sm:right-auto sm:w-[22.5rem] sm:max-w-[calc(100vw-3rem)] sm:max-h-[calc(100vh-3rem)]"
       style={{ fontFamily: "'Vazirmatn', sans-serif" }}
       aria-label="تلفن"
     >
-      <header className="px-4 pt-4 pb-3 flex items-center gap-3" style={{ background: 'linear-gradient(135deg, rgba(232,121,249,0.35), rgba(99,102,241,0.28) 55%, rgba(59,130,246,0.25))' }}>
+      <header className="theme-banner px-4 pt-4 pb-3 flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-white">تلفن</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-bold text-white">تلفن</p>
+            <SectionHelp topic="phone" tone="banner" />
+          </div>
           <p className="text-[11px] text-white/80 mt-0.5">داخلی {fa(201)} · {PRESENCE.find((item) => item.id === presence)?.label}</p>
         </div>
         <label className="text-[11px] text-white/80">

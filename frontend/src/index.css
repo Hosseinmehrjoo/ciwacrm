@@ -243,11 +243,20 @@ body::after {
   }
 }
 
-.crm-dialog {
+dialog.crm-dialog {
   border: 0;
   padding: 0;
   background: transparent;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  margin: 0;
+  transform: translate(-50%, -50%);
   width: min(36rem, calc(100% - 2rem));
+  max-width: min(36rem, calc(100% - 2rem));
+  max-height: calc(100vh - 2rem);
 }
 
 .crm-dialog::backdrop {
@@ -390,7 +399,144 @@ html[data-theme="light"] .sidebar-item:hover {
   color: #5b21b6;
 }
 
-html[data-theme="light"] .sidebar-item.active,
+html[data-theme="light"] .sidebar-item.active {
+  background: linear-gradient(135deg, #a21caf, #4f46e5 55%, #2563eb);
+  color: #ffffff;
+  border-right-color: #f0abfc;
+}
+
 html[data-theme="light"] .btn-primary {
   color: #ffffff;
+}
+
+.vision-app .bg-white\/10,
+.vision-app .bg-white\/15,
+.vision-app .hover\:bg-white\/10:hover,
+.vision-app .hover\:bg-white\/15:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.vision-app .bg-white\/40,
+.vision-app .bg-white\/50,
+.vision-app .bg-white\/70,
+.vision-app .hover\:bg-white\/40:hover,
+.vision-app .hover\:bg-white\/70:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.vision-app .text-slate-100,
+.vision-app .text-slate-200,
+.vision-app .text-violet-200,
+.vision-app .text-violet-600,
+.vision-app .text-violet-700 {
+  color: #ddd6fe;
+}
+
+.vision-app .text-rose-500,
+.vision-app .text-rose-600 {
+  color: #fecdd3;
+}
+
+.vision-app .text-emerald-500 {
+  color: #a7f3d0;
+}
+
+.vision-app .text-sky-500 {
+  color: #bae6fd;
+}
+
+.vision-app .text-amber-700,
+.vision-app .text-amber-800 {
+  color: #fde68a;
+}
+
+.vision-app .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.18);
+}
+
+.vision-app select option {
+  color: #1c1730;
+  background-color: #ffffff;
+}
+
+.ciwa-accent {
+  color: #ddd6fe;
+}
+
+.glass-card.theme-banner,
+.theme-banner {
+  background: linear-gradient(135deg, rgba(232, 121, 249, 0.5), rgba(79, 70, 229, 0.42) 52%, rgba(37, 99, 235, 0.5));
+}
+
+html[data-theme="light"] .vision-app .bg-white\/10,
+html[data-theme="light"] .vision-app .hover\:bg-white\/10:hover,
+html[data-theme="light"] .vision-app .hover\:bg-white\/15:hover {
+  background-color: rgba(76, 49, 120, 0.08);
+}
+
+html[data-theme="light"] .vision-app .bg-white\/15 {
+  background-color: rgba(76, 49, 120, 0.12);
+}
+
+html[data-theme="light"] .vision-app .bg-white\/40,
+html[data-theme="light"] .vision-app .bg-white\/50,
+html[data-theme="light"] .vision-app .bg-white\/70,
+html[data-theme="light"] .vision-app .hover\:bg-white\/40:hover,
+html[data-theme="light"] .vision-app .hover\:bg-white\/70:hover {
+  background-color: rgba(255, 255, 255, 0.78);
+}
+
+html[data-theme="light"] .vision-app .text-slate-100,
+html[data-theme="light"] .vision-app .text-slate-200 {
+  color: #3f3658;
+}
+
+html[data-theme="light"] .vision-app .text-violet-200,
+html[data-theme="light"] .vision-app .text-violet-600,
+html[data-theme="light"] .vision-app .text-violet-700 {
+  color: #6d28d9;
+}
+
+html[data-theme="light"] .vision-app .text-rose-500,
+html[data-theme="light"] .vision-app .text-rose-600 {
+  color: #9f1239;
+}
+
+html[data-theme="light"] .vision-app .text-emerald-500 {
+  color: #047857;
+}
+
+html[data-theme="light"] .vision-app .text-sky-500 {
+  color: #0369a1;
+}
+
+html[data-theme="light"] .vision-app .text-amber-700,
+html[data-theme="light"] .vision-app .text-amber-800 {
+  color: #92400e;
+}
+
+html[data-theme="light"] .vision-app .bg-amber-50 {
+  background-color: rgba(254, 243, 199, 0.95);
+}
+
+html[data-theme="light"] .ciwa-accent {
+  color: #6d28d9;
+}
+
+html[data-theme="light"] .glass-card.theme-banner,
+html[data-theme="light"] .theme-banner {
+  background: linear-gradient(135deg, #a21caf, #4f46e5 52%, #1d4ed8);
+}
+
+html[data-theme="light"] .theme-banner,
+html[data-theme="light"] .theme-banner .text-white,
+html[data-theme="light"] .theme-banner .text-white\/80,
+html[data-theme="light"] .theme-banner .text-white\/90 {
+  color: #ffffff;
+}
+
+html[data-theme="light"] .theme-banner select {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.35);
 }

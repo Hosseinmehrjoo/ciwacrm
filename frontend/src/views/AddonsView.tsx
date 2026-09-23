@@ -4,6 +4,7 @@ import { createAddonRecord, deleteAddonRecord, listAddonRecords } from '../addon
 import { addonIcon } from '../addons/icons'
 import type { AddonManifest, AddonRecord } from '../addons/types'
 import { Puzzle, Trash2, Upload } from 'lucide-react'
+import { SectionHelp } from '../help/SectionHelp'
 
 type AddonActions = {
   install: (id: string) => Promise<void>
@@ -46,7 +47,10 @@ export function AddonsView({
     <section className="flex flex-col gap-5">
       <div className="glass-card rounded-[28px] p-6">
         <p className="text-xs text-slate-400 mb-2">ماژول‌ها</p>
-        <h1 className="text-xl font-bold text-slate-800">امکانات نصب‌شدنی</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold text-slate-800">امکانات نصب‌شدنی</h1>
+          <SectionHelp topic="addon-store" />
+        </div>
         <p className="text-sm text-slate-500 leading-7 mt-2 max-w-2xl">
           هر ماژول یک قابلیت اضافه است. بعد از نصب، بخش تازه‌اش در منوی ماژول‌ها دیده می‌شود. حذف ماژول دادهٔ ثبت‌شده را نگه می‌دارد تا دوباره نصب شود.
         </p>
@@ -66,7 +70,7 @@ export function AddonsView({
             return (
               <article key={addon.id} className="rounded-2xl border border-slate-200 px-4 py-3 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(139,92,246,0.15)' }}>
-                  <Icon size={18} style={{ color: '#7c3aed' }} />
+                  <Icon size={18} className="ciwa-accent" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-slate-800">{addon.name}</p>
@@ -91,7 +95,7 @@ export function AddonsView({
 
       <div className="glass-card rounded-[28px] p-5">
         <div className="flex items-center gap-2 mb-2">
-          <Puzzle size={18} style={{ color: '#7c3aed' }} />
+          <Puzzle size={18} className="ciwa-accent" />
           <h2 className="text-sm font-semibold text-slate-800">نصب ماژول جدید</h2>
         </div>
         <p className="text-sm text-slate-500 leading-7 mb-4">از فهرست آماده نصب کنید، یا یک فایل module.json و یا zip حاوی همان پرونده را بارگذاری کنید.</p>
@@ -102,7 +106,7 @@ export function AddonsView({
               <article key={addon.id} className="rounded-2xl border border-slate-200 p-4 flex flex-col gap-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(232,121,249,0.15)' }}>
-                    <Icon size={18} style={{ color: '#c026d3' }} />
+                    <Icon size={18} className="ciwa-accent" />
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-slate-800">{addon.name}</p>
@@ -193,14 +197,28 @@ export function AddonScreen({ addon }: { addon: AddonManifest }) {
   }
 
   return (
-    <section className="glass-card rounded-[28px] p-5 flex flex-col gap-4">
-      <div className="flex items-start justify-between gap-3">
+    <section className="glass-card rounded-[28px] p-4 sm:p-5 flex flex-col gap-4 min-w-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.15)' }}>
-            <Icon size={20} style={{ color: '#7c3aed' }} />
+            <Icon size={20} className="ciwa-accent" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-800">{addon.name}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-slate-800">{addon.name}</h1>
+              <SectionHelp
+                topic={addon.id}
+                fallback={{
+                  title: addon.name,
+                  about: addon.description,
+                  steps: [
+                    `«${addon.recordLabel} جدید» را بزنید و فیلدهای لازم را پر کنید.`,
+                    'رکورد را در فهرست همین صفحه پیدا کنید.',
+                    'اگر این ماژول را از منو بردارید، ثبت‌ها برای نصب دوباره می‌مانند.',
+                  ],
+                }}
+              />
+            </div>
             <p className="text-sm text-slate-500 leading-6 mt-1">{addon.description}</p>
           </div>
         </div>

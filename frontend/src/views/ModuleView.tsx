@@ -3,6 +3,7 @@ import { ApiError } from '../api/client'
 import { createModuleRecord, deleteModuleRecord, listModule, updateModuleRecord, type CrmRecord } from '../api/records'
 import { useSession } from '../auth/SessionProvider'
 import { moduleById, modulesInGroup, optionLabel, probabilityForStage, type FieldDef, type ModuleDef } from '../crm/modules'
+import { SectionHelp } from '../help/SectionHelp'
 
 export function ModuleView({
   moduleId,
@@ -85,7 +86,10 @@ export function ModuleView({
   if (session.demo) {
     return (
       <section className="glass-card rounded-2xl p-6">
-        <h2 className="text-sm font-semibold text-slate-800">{module.label}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-slate-800">{module.label}</h2>
+          <SectionHelp topic={module.id} />
+        </div>
         <p className="text-sm text-slate-600 mt-3 leading-7">این بخش وقتی هسته در دسترس باشد از سامانه خوانده می‌شود.</p>
       </section>
     )
@@ -115,8 +119,8 @@ export function ModuleView({
   }
 
   return (
-    <section className="glass-card rounded-2xl p-5 flex flex-col gap-4">
-      {siblings.length > 1 && (
+    <section className="glass-card rounded-2xl p-4 sm:p-5 flex flex-col gap-4 min-w-0">
+      {siblings.length > 1 && siblings.length <= 8 && (
         <div className="flex flex-wrap gap-2">
           {siblings.map((item) => (
             <button
@@ -132,23 +136,28 @@ export function ModuleView({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-slate-800">{module.label}</h2>
-        <button type="button" className="btn-primary rounded-2xl px-4 py-2 text-sm font-semibold" onClick={() => setFormRecord(null)}>
-          افزودن {module.singular}
-        </button>
-        <label className="sr-only" htmlFor={`${module.id}-search`}>جستجو در {module.label}</label>
-        <input
-          id={`${module.id}-search`}
-          value={query}
-          onChange={(event) => {
-            setPage(1)
-            setQuery(event.target.value)
-            onQueryChange?.(event.target.value)
-          }}
-          placeholder={`جستجو در ${module.label}`}
-          className="w-full max-w-xs rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
-        />
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-slate-800">{module.label}</h2>
+          <SectionHelp topic={module.id} />
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <label className="sr-only" htmlFor={`${module.id}-search`}>جستجو در {module.label}</label>
+          <input
+            id={`${module.id}-search`}
+            value={query}
+            onChange={(event) => {
+              setPage(1)
+              setQuery(event.target.value)
+              onQueryChange?.(event.target.value)
+            }}
+            placeholder={`جستجو در ${module.label}`}
+            className="w-full sm:w-64 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+          />
+          <button type="button" className="btn-primary rounded-2xl px-4 py-2 text-sm font-semibold" onClick={() => setFormRecord(null)}>
+            افزودن {module.singular}
+          </button>
+        </div>
       </div>
 
       {loading && <p className="text-sm text-slate-600">در حال خواندن {module.label}...</p>}
@@ -163,18 +172,18 @@ export function ModuleView({
             <thead>
               <tr className="text-slate-500 border-b border-slate-100">
                 {columns.map((field) => (
-                  <th key={field.name} className="font-medium py-2 pl-3">{field.label}</th>
+                  <th key={field.name} className="font-medium py-2 pl-3 whitespace-nowrap">{field.label}</th>
                 ))}
-                <th className="font-medium py-2">عملیات</th>
+                <th className="font-medium py-2 whitespace-nowrap">عملیات</th>
               </tr>
             </thead>
             <tbody>
               {records.map((record) => (
                 <tr key={record.id} className="border-b border-slate-50">
                   {columns.map((field) => (
-                    <td key={field.name} className="py-3 pl-3 text-slate-700">{displayValue(field, record.attributes[field.name])}</td>
+                    <td key={field.name} className="py-3 pl-3 text-slate-700 whitespace-nowrap">{displayValue(field, record.attributes[field.name])}</td>
                   ))}
-                  <td className="py-3">
+                  <td className="py-3 whitespace-nowrap">
                     <div className="flex gap-2">
                       <button type="button" className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700" onClick={() => setFormRecord(record)}>
                         ویرایش

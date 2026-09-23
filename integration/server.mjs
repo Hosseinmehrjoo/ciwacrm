@@ -1,5 +1,7 @@
 import http from 'node:http'
 import { handleAddonRequest } from './addons.mjs'
+import { handleAiRequest } from './ai.mjs'
+import { hostUsage } from './host.mjs'
 
 const port = Number(process.env.PORT || 8787)
 const coreBaseUrl = required('CIWA_CORE_URL').replace(/\/$/, '')
@@ -25,8 +27,27 @@ const server = http.createServer(async (req, res) => {
       await currentUser(req, res)
       return
     }
+    if (req.method === 'GET' && url.pathname === '/api/host') {
+      if (!readCookie(req, ACCESS_COOKIE)) {
+        sendJson(res, 401, { error: 'وارد نشده‌اید.' })
+        return
+      }
+      sendJson(res, 200, await hostUsage())
+      return
+    }
     if (url.pathname.startsWith('/api/crm/')) {
       await proxyCrm(req, res, url)
+      return
+    }
+    if (url.pathname.startsWith('/api/ai')) {
+      await handleAiRequest({
+        req,
+        res,
+        url,
+        access: readCookie(req, ACCESS_COOKIE),
+        sendJson,
+        crmFetch,
+      })
       return
     }
     if (url.pathname.startsWith('/api/addons')) {
