@@ -7,12 +7,12 @@ if (!defined('sugarEntry')) {
 chdir('/var/www/html');
 require 'include/entryPoint.php';
 
-$clientId = getenv('SUITECRM_CLIENT_ID') ?: '';
-$secret = getenv('SUITECRM_CLIENT_SECRET') ?: '';
+$clientId = getenv('CIWA_CLIENT_ID') ?: '';
+$secret = getenv('CIWA_CLIENT_SECRET') ?: '';
 $redirect = getenv('CIWA_PUBLIC_URL') ?: 'http://localhost:8443';
 
 if ($clientId === '' || $secret === '') {
-    fwrite(STDERR, "SUITECRM_CLIENT_ID and SUITECRM_CLIENT_SECRET are required\n");
+    fwrite(STDERR, "CIWA_CLIENT_ID and CIWA_CLIENT_SECRET are required\n");
     exit(1);
 }
 

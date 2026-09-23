@@ -1,0 +1,14 @@
+{
+  "id": "loyalty",
+  "name": "باشگاه مشتریان",
+  "version": "1.0.0",
+  "description": "امتیاز وفاداری مشتریان را ثبت کنید و سطح هر مشتری را ببینید.",
+  "navLabel": "باشگاه مشتریان",
+  "icon": "award",
+  "recordLabel": "عضو",
+  "fields": [
+    { "name": "name", "label": "نام مشتری", "kind": "text", "required": true },
+    { "name": "points", "label": "امتیاز", "kind": "number", "required": true },
+    { "name": "level", "label": "سطح", "kind": "text" }
+  ]
+}

@@ -2,9 +2,9 @@ services:
   db:
     image: public.ecr.aws/docker/library/mariadb:11
     environment:
-      MARIADB_DATABASE: suitecrm
-      MARIADB_USER: suitecrm
-      MARIADB_PASSWORD: ${SUITECRM_DB_PASSWORD:?set SUITECRM_DB_PASSWORD}
+      MARIADB_DATABASE: ${CIWA_DB_NAME:-ciwa}
+      MARIADB_USER: ${CIWA_DB_USER:-ciwa}
+      MARIADB_PASSWORD: ${CIWA_DB_PASSWORD:?set CIWA_DB_PASSWORD}
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?set MARIADB_ROOT_PASSWORD}
     volumes:
       - db_data:/var/lib/mysql
@@ -15,25 +15,25 @@ services:
       retries: 20
 
   crm:
-    build: ./deploy/suitecrm
+    build: ./deploy/core
     depends_on:
       db:
         condition: service_healthy
     environment:
-      SUITECRM_DB_HOST: db
-      SUITECRM_DB_NAME: suitecrm
-      SUITECRM_DB_USER: suitecrm
-      SUITECRM_DB_PASSWORD: ${SUITECRM_DB_PASSWORD:?set SUITECRM_DB_PASSWORD}
-      SUITECRM_ADMIN_USER: admin
-      SUITECRM_ADMIN_PASSWORD: ${SUITECRM_ADMIN_PASSWORD:?set SUITECRM_ADMIN_PASSWORD}
-      SUITECRM_PUBLIC_URL: ${SUITECRM_PUBLIC_URL:-http://localhost:8081}
-      SUITECRM_CLIENT_ID: ${SUITECRM_CLIENT_ID:?set SUITECRM_CLIENT_ID}
-      SUITECRM_CLIENT_SECRET: ${SUITECRM_CLIENT_SECRET:?set SUITECRM_CLIENT_SECRET}
+      CIWA_DB_HOST: db
+      CIWA_DB_NAME: ${CIWA_DB_NAME:-ciwa}
+      CIWA_DB_USER: ${CIWA_DB_USER:-ciwa}
+      CIWA_DB_PASSWORD: ${CIWA_DB_PASSWORD:?set CIWA_DB_PASSWORD}
+      CIWA_ADMIN_USER: admin
+      CIWA_ADMIN_PASSWORD: ${CIWA_ADMIN_PASSWORD:?set CIWA_ADMIN_PASSWORD}
+      CIWA_CORE_PUBLIC_URL: ${CIWA_CORE_PUBLIC_URL:-http://localhost:8081}
+      CIWA_CLIENT_ID: ${CIWA_CLIENT_ID:?set CIWA_CLIENT_ID}
+      CIWA_CLIENT_SECRET: ${CIWA_CLIENT_SECRET:?set CIWA_CLIENT_SECRET}
       CIWA_PUBLIC_URL: ${CIWA_PUBLIC_URL:-http://localhost:8443}
       HOST_UID: ${HOST_UID:-1000}
       HOST_GID: ${HOST_GID:-1000}
     volumes:
-      - ./SuiteCRM:/var/www/html
+      - ./core:/var/www/html
     ports:
       - '8081:80'
 
@@ -46,9 +46,9 @@ services:
       - crm
     environment:
       PORT: 8787
-      SUITECRM_BASE_URL: http://crm
-      SUITECRM_CLIENT_ID: ${SUITECRM_CLIENT_ID:?set SUITECRM_CLIENT_ID}
-      SUITECRM_CLIENT_SECRET: ${SUITECRM_CLIENT_SECRET:?set SUITECRM_CLIENT_SECRET}
+      CIWA_CORE_URL: http://crm
+      CIWA_CLIENT_ID: ${CIWA_CLIENT_ID:?set CIWA_CLIENT_ID}
+      CIWA_CLIENT_SECRET: ${CIWA_CLIENT_SECRET:?set CIWA_CLIENT_SECRET}
     volumes:
       - ./integration:/app
     ports:

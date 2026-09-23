@@ -352,7 +352,7 @@ function KpiCard({
       </div>
       <div className="flex items-center gap-1">
         {kpi.up ? <ArrowUpRight size={14} className="text-emerald-600" /> : <ArrowDownRight size={14} className="text-red-500" />}
-        <span className="text-xs text-slate-500">در SuiteCRM</span>
+        <span className="text-xs text-slate-500">ثبت‌شده</span>
       </div>
     </button>
   )
@@ -406,7 +406,7 @@ export function SettingsView({ onOpen }: { onOpen: (id: string) => void }) {
     <section className="glass-card rounded-2xl p-5 flex flex-col gap-4">
       <h2 className="text-sm font-semibold text-slate-800">تنظیمات</h2>
       <p className="text-sm text-slate-600 leading-7">
-        نشست فعلی به کاربر {session.user?.fullName || 'SuiteCRM'} وصل است. داده‌ها در هسته SuiteCRM نگهداری می‌شوند.
+        نشست فعلی به کاربر {session.user?.fullName || 'کاربر'} وصل است. داده‌ها در هسته نگهداری می‌شوند.
       </p>
       <div className="grid gap-2 sm:grid-cols-2">
         {modules.map((module) => (
@@ -425,7 +425,7 @@ export function AiView() {
     <section className="glass-card rounded-2xl p-6">
       <h2 className="text-sm font-semibold text-slate-800">هوش مصنوعی</h2>
       <p className="text-sm text-slate-600 mt-3 leading-7">
-        هسته SuiteCRM ماژول هوش مصنوعی ندارد. بخش‌های فروش، مخاطب، پشتیبانی و مالی از همین هسته همگام هستند.
+        هسته ماژول هوش مصنوعی ندارد. بخش‌های فروش، مخاطب، پشتیبانی و مالی با همین هسته همگام هستند.
       </p>
     </section>
   )

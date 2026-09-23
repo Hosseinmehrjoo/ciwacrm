@@ -255,11 +255,24 @@ body::after {
   backdrop-filter: blur(8px);
 }
 
+@keyframes ciwa-phone-ring {
+  0%, 100% { transform: rotate(0); }
+  15% { transform: rotate(-14deg); }
+  30% { transform: rotate(12deg); }
+  45% { transform: rotate(-8deg); }
+  60% { transform: rotate(6deg); }
+}
+
+.phone-dock-ring {
+  animation: ciwa-phone-ring 0.9s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hero-blob,
   .btn-primary,
   .kpi-card,
-  .sidebar-item {
+  .sidebar-item,
+  .phone-dock-ring {
     animation: none;
     transition: none;
   }

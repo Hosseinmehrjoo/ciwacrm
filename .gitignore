@@ -10,18 +10,21 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 
-# SuiteCRM runtime, install output, and credentials
-SuiteCRM/config.php
-SuiteCRM/config_override.php
-SuiteCRM/config_si.php
-SuiteCRM/.htaccess
-SuiteCRM/cache/
-SuiteCRM/upload/
-SuiteCRM/vendor/
-SuiteCRM/custom/
-SuiteCRM/*.log
-SuiteCRM/Api/V8/OAuth2/private.key
-SuiteCRM/Api/V8/OAuth2/public.key
+# Core runtime, install output, and credentials
+core/config.php
+core/config_override.php
+core/config_si.php
+core/.htaccess
+core/cache/
+core/upload/
+core/vendor/
+core/custom/
+core/*.log
+core/Api/V8/OAuth2/private.key
+core/Api/V8/OAuth2/public.key
+
+# Installed addon state and uploaded packages
+data/
 
 # Logs and OS/editor noise
 *.log

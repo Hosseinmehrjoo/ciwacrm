@@ -77,7 +77,7 @@ export function ContactsView({ openCreateToken = 0 }: { openCreateToken?: number
       <section className="glass-card rounded-2xl p-6">
         <h2 className="text-sm font-semibold text-slate-800">مخاطبین</h2>
         <p className="text-sm text-slate-600 mt-3 leading-7">
-          این فهرست وقتی SuiteCRM در دسترس باشد از ماژول Contacts خوانده می‌شود. الان اتصال برقرار نیست.
+          این فهرست وقتی هسته در دسترس باشد از سامانه خوانده می‌شود. الان اتصال برقرار نیست.
         </p>
       </section>
     )
@@ -223,7 +223,7 @@ function DeleteContactDialog({
     >
       <div className="glass-card rounded-2xl bg-white p-5 flex flex-col gap-4">
         <h2 id="delete-contact-title" className="text-base font-semibold text-slate-800">حذف مخاطب</h2>
-        <p className="text-sm text-slate-700 leading-7">{name} از SuiteCRM حذف می‌شود.</p>
+        <p className="text-sm text-slate-700 leading-7">{name} حذف می‌شود.</p>
         <div className="flex justify-end gap-2">
           <button type="button" className="px-4 py-2 rounded-2xl border border-slate-200 text-sm" onClick={onCancel} disabled={deleting}>
             انصراف

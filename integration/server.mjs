@@ -1,9 +1,10 @@
 import http from 'node:http'
+import { handleAddonRequest } from './addons.mjs'
 
 const port = Number(process.env.PORT || 8787)
-const suiteCrmBaseUrl = required('SUITECRM_BASE_URL').replace(/\/$/, '')
-const clientId = required('SUITECRM_CLIENT_ID')
-const clientSecret = required('SUITECRM_CLIENT_SECRET')
+const coreBaseUrl = required('CIWA_CORE_URL').replace(/\/$/, '')
+const clientId = required('CIWA_CLIENT_ID')
+const clientSecret = required('CIWA_CLIENT_SECRET')
 const cookieSecure = process.env.CIWA_COOKIE_SECURE === '1'
 
 const ACCESS_COOKIE = 'ciwa_access'
@@ -26,6 +27,17 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname.startsWith('/api/crm/')) {
       await proxyCrm(req, res, url)
+      return
+    }
+    if (url.pathname.startsWith('/api/addons')) {
+      await handleAddonRequest({
+        req,
+        res,
+        url,
+        authenticated: Boolean(readCookie(req, ACCESS_COOKIE)),
+        sendJson,
+        readRaw,
+      })
       return
     }
     sendJson(res, 404, { error: 'مسیر پیدا نشد.' })
@@ -59,7 +71,7 @@ async function login(req, res) {
 async function logout(req, res) {
   const access = readCookie(req, ACCESS_COOKIE)
   if (access) {
-    await fetch(`${suiteCrmBaseUrl}/Api/V8/logout`, {
+    await fetch(`${coreBaseUrl}/Api/V8/logout`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${access}`, Accept: 'application/vnd.api+json' },
     }).catch(() => undefined)
@@ -105,7 +117,7 @@ async function crmFetch(path, { method, access, body, contentType }) {
     Authorization: `Bearer ${access}`,
   }
   if (contentType) headers['Content-Type'] = contentType
-  const first = await fetch(`${suiteCrmBaseUrl}/Api${path}`, { method, headers, body })
+  const first = await fetch(`${coreBaseUrl}/Api${path}`, { method, headers, body })
   if (first.status !== 401) return first
   return first
 }
@@ -118,19 +130,19 @@ async function requestToken(fields) {
   })
   let response
   try {
-    response = await fetch(`${suiteCrmBaseUrl}/Api/access_token`, {
+    response = await fetch(`${coreBaseUrl}/Api/access_token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
       body: payload,
     })
   } catch {
-    const error = new Error('SuiteCRM در دسترس نیست.')
+    const error = new Error('هسته در دسترس نیست.')
     error.status = 503
     throw error
   }
   const data = await response.json().catch(() => ({}))
   if (!response.ok || !data.access_token) {
-    const error = new Error(response.ok ? 'پاسخ ورود SuiteCRM قابل استفاده نیست.' : 'نام کاربری یا رمز عبور درست نیست.')
+    const error = new Error(response.ok ? 'پاسخ ورود قابل استفاده نیست.' : 'نام کاربری یا رمز عبور درست نیست.')
     error.status = response.ok ? 502 : (response.status || 401)
     throw error
   }

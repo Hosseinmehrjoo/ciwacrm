@@ -1,0 +1,14 @@
+{
+  "id": "services",
+  "name": "کاتالوگ خدمات",
+  "version": "1.0.0",
+  "description": "خدمات اضافی سازمان را تعریف کنید تا کنار فروش و پشتیبانی در دسترس باشند.",
+  "navLabel": "خدمات",
+  "icon": "sparkles",
+  "recordLabel": "خدمت",
+  "fields": [
+    { "name": "name", "label": "نام خدمت", "kind": "text", "required": true },
+    { "name": "price", "label": "مبلغ (ریال)", "kind": "number" },
+    { "name": "description", "label": "شرح", "kind": "textarea" }
+  ]
+}

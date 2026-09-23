@@ -1,0 +1,14 @@
+{
+  "id": "feedback",
+  "name": "نظرسنجی مشتریان",
+  "version": "1.0.0",
+  "description": "بازخورد مشتریان را بعد از فروش یا پشتیبانی جمع کنید.",
+  "navLabel": "نظرسنجی",
+  "icon": "clipboard",
+  "recordLabel": "نظر",
+  "fields": [
+    { "name": "name", "label": "نام مشتری", "kind": "text", "required": true },
+    { "name": "score", "label": "امتیاز از ۱۰", "kind": "number", "required": true },
+    { "name": "comment", "label": "توضیح", "kind": "textarea" }
+  ]
+}

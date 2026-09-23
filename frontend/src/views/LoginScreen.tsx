@@ -28,12 +28,12 @@ export function LoginScreen() {
         <img src="/ciwa-brand.jpg" alt="ciwaCRM" className="w-40 h-40 mx-auto rounded-3xl object-cover" />
         <div className="text-center">
           <h1 className="text-lg font-bold brand-text">ورود به CIWA CRM</h1>
-          <p className="text-sm text-slate-400 mt-1">با حساب کاربری SuiteCRM وارد شوید.</p>
+          <p className="text-sm text-slate-400 mt-1">با حساب کاربری خود وارد شوید.</p>
         </div>
 
         {session.offline && (
           <p className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 leading-6">
-            سرویس اتصال در دسترس نیست. تا وقتی SuiteCRM بالا نیامده، می‌توانید نمای نمونه را ببینید.
+            سرویس اتصال در دسترس نیست. تا وقتی هسته بالا نیامده، می‌توانید نمای نمونه را ببینید.
           </p>
         )}
 

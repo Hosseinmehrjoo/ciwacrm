@@ -1,14 +1,18 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSession, SessionProvider } from './auth/SessionProvider'
 import { LoginScreen } from './views/LoginScreen'
 import { ModuleView } from './views/ModuleView'
 import { AiView, DashboardView, SettingsView } from './views/DashboardView'
 import { moduleById } from './crm/modules'
 import { useTheme } from './theme/useTheme'
+import { addonIcon } from './addons/icons'
+import { useAddons } from './addons/useAddons'
+import { AddonScreen, AddonsView } from './views/AddonsView'
+import { Softphone } from './widgets/Softphone'
 import {
   LayoutDashboard, Users, TrendingUp, Building2, Ticket, Megaphone,
   CheckSquare, Calendar, FileText, BarChart2, MessageSquare, ShoppingCart,
-  DollarSign, Brain, Settings, Bell, Search, Sun, Moon, Menu,
+  DollarSign, Brain, Settings, Bell, Search, Sun, Moon, Menu, Puzzle,
 } from 'lucide-react'
 
 const navItems = [
@@ -56,13 +60,39 @@ export default function App() {
 function CrmShell() {
   const session = useSession()
   const { theme, toggleTheme } = useTheme()
+  const addons = useAddons(session.status === 'authenticated')
   const [section, setSection] = useState('dashboard')
   const [createContactToken, setCreateContactToken] = useState(0)
   const [headerQuery, setHeaderQuery] = useState('')
+  const [phoneOpen, setPhoneOpen] = useState(false)
+  const phoneSeen = useRef<boolean | null>(null)
+  const phoneAddon = addons.addons.find((addon) => addon.installed && addon.widget === 'softphone')
+
+  useEffect(() => {
+    if (!addons.ready) return
+    const installed = Boolean(phoneAddon)
+    if (phoneSeen.current === null) {
+      phoneSeen.current = installed
+      return
+    }
+    if (!phoneSeen.current && installed) setPhoneOpen(true)
+    if (!installed) setPhoneOpen(false)
+    phoneSeen.current = installed
+  }, [addons.ready, phoneAddon])
 
   function openSection(id: string) {
     setHeaderQuery('')
     setSection(id)
+  }
+
+  function openAddon(target: string) {
+    const id = target.replace(/^addon:/, '')
+    const addon = addons.addons.find((item) => item.id === id)
+    if (addon?.widget === 'softphone') {
+      setPhoneOpen(true)
+      return
+    }
+    openSection(target.startsWith('addon:') ? target : `addon:${id}`)
   }
 
   if (session.status === 'loading') {
@@ -115,6 +145,16 @@ function CrmShell() {
             </div>
           </div>
 
+          {addons.addons.filter((addon) => addon.installed).map((addon) => (
+            <SidebarItem
+              key={addon.id}
+              icon={addonIcon(addon.icon)}
+              label={addon.navLabel}
+              active={addon.widget === 'softphone' ? phoneOpen : section === `addon:${addon.id}`}
+              onClick={() => openAddon(`addon:${addon.id}`)}
+            />
+          ))}
+          <SidebarItem icon={Puzzle} label="نصب ماژول جدید" active={section === 'addon-store'} onClick={() => openSection('addon-store')} />
           {moduleItems.map(item => (
             <SidebarItem key={item.id} icon={item.icon} label={item.label} active={section === item.id} onClick={() => openSection(item.id)} />
           ))}
@@ -199,7 +239,7 @@ function CrmShell() {
         <div className="flex-1 p-5 flex flex-col gap-5 overflow-y-auto">
           {session.demo && (
             <p className="text-sm text-slate-700 bg-white border border-slate-200 rounded-2xl px-4 py-3">
-              SuiteCRM در دسترس نیست. این نما داده نمونه است و ذخیره نمی‌شود.
+              هسته در دسترس نیست. این نما داده نمونه است و ذخیره نمی‌شود.
             </p>
           )}
           {section === 'dashboard' && (
@@ -213,6 +253,18 @@ function CrmShell() {
           )}
           {section === 'settings' && <SettingsView onOpen={openSection} />}
           {section === 'ai' && <AiView />}
+          {section === 'addon-store' && (
+            <AddonsView
+              addons={addons.addons}
+              ready={addons.ready}
+              error={addons.error}
+              actions={addons}
+              onOpen={openAddon}
+            />
+          )}
+          {section.startsWith('addon:') && addons.addons.some((addon) => addon.installed && !addon.widget && `addon:${addon.id}` === section) && (
+            <AddonScreen addon={addons.addons.find((addon) => `addon:${addon.id}` === section)!} />
+          )}
           {moduleById(section) && (
             <ModuleView
               key={section}
@@ -225,6 +277,7 @@ function CrmShell() {
           )}
         </div>
       </main>
+      {phoneAddon && <Softphone open={phoneOpen} onOpenChange={setPhoneOpen} />}
     </div>
   )
 }

@@ -72,7 +72,7 @@ export function ContactForm({
       else await createModuleRecord('Contacts', attributes)
       onSaved()
     } catch (caught) {
-      setFormError(caught instanceof ApiError ? caught.message : 'ذخیره مخاطب در SuiteCRM ناموفق بود.')
+      setFormError(caught instanceof ApiError ? caught.message : 'ذخیره مخاطب ناموفق بود.')
       summaryRef.current?.focus()
     } finally {
       setSaving(false)
@@ -152,7 +152,7 @@ export function ContactForm({
             انصراف
           </button>
           <button type="submit" className="btn-primary rounded-2xl px-5 py-2 text-sm font-semibold disabled:opacity-60" disabled={saving}>
-            {saving ? 'در حال ذخیره...' : 'ذخیره در SuiteCRM'}
+            {saving ? 'در حال ذخیره...' : 'ذخیره'}
           </button>
         </div>
       </form>
