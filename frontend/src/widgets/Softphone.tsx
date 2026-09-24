@@ -221,7 +221,7 @@ export function Softphone({ open, onOpenChange }: { open: boolean, onOpenChange:
         type="button"
         aria-label="باز کردن تلفن"
         onClick={() => onOpenChange(true)}
-        className={`fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-40 w-14 h-14 rounded-full text-white shadow-lg grid place-items-center ${dockRinging ? 'phone-dock-ring' : ''}`}
+        className={`phone-dock fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-40 w-14 h-14 rounded-full text-white shadow-lg grid place-items-center ${dockRinging ? 'phone-dock-ring' : ''}`}
         style={{ background: 'linear-gradient(135deg, #e879f9, #6366f1 55%, #3b82f6)' }}
       >
         {dockRinging ? <PhoneIncoming size={22} /> : <Phone size={22} />}

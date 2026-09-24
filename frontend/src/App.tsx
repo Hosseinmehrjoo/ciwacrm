@@ -11,10 +11,12 @@ import { useAddons } from './addons/useAddons'
 import { AddonScreen, AddonsView } from './views/AddonsView'
 import { Softphone } from './widgets/Softphone'
 import { SupportView } from './views/SupportView'
+import { BusyIndicator, LoadingMark } from './ui/LoadingMark'
 import {
   LayoutDashboard, Users, TrendingUp, Ticket, Megaphone,
   CheckSquare, Calendar, BarChart2,
   DollarSign, Brain, Settings, Bell, Search, Sun, Moon, Menu, X, Puzzle, LifeBuoy,
+  Zap, ChevronDown, Plus,
 } from 'lucide-react'
 
 const groupIcons = {
@@ -29,7 +31,54 @@ const groupIcons = {
   admin: Settings,
 } as const
 
+const quickActions = [
+  { id: 'contacts', label: 'افزودن مخاطب' },
+  { id: 'accounts', label: 'افزودن مشتری' },
+  { id: 'leads', label: 'افزودن سرنخ' },
+  { id: 'opportunities', label: 'افزودن فرصت فروش' },
+  { id: 'invoices', label: 'افزودن فاکتور' },
+  { id: 'quotes', label: 'افزودن پیش‌فاکتور' },
+  { id: 'cases', label: 'افزودن تیکت' },
+  { id: 'tasks', label: 'افزودن وظیفه' },
+  { id: 'meetings', label: 'افزودن قرار' },
+  { id: 'calls', label: 'افزودن تماس' },
+  { id: 'notes', label: 'افزودن یادداشت' },
+] as const
+
 // ── Sub-components ─────────────────────────────────────────────────────────
+
+function QuickMenu({ open, onToggle, onPick }: { open: boolean; onToggle: () => void; onPick: (id: string) => void }) {
+  return (
+    <div className="mb-1">
+      <button
+        type="button"
+        className={`sidebar-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-right ${open ? 'active' : 'text-slate-500'}`}
+        aria-expanded={open}
+        aria-controls="quick-actions"
+        onClick={onToggle}
+      >
+        <Zap size={17} className="shrink-0" />
+        <span className="flex-1">عملکرد سریع</span>
+        <ChevronDown size={15} className={`shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div id="quick-actions" className="quick-menu mt-1 rounded-2xl p-1.5 flex flex-col gap-0.5">
+          {quickActions.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-right text-xs font-medium text-slate-600 hover:bg-white/10"
+              onClick={() => onPick(action.id)}
+            >
+              <Plus size={13} className="shrink-0" />
+              <span>{action.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function SidebarItem({ icon: Icon, label, active, onClick }: { icon: any, label: string, active?: boolean, onClick?: () => void }) {
   return (
@@ -45,6 +94,7 @@ function SidebarItem({ icon: Icon, label, active, onClick }: { icon: any, label:
 export default function App() {
   return (
     <SessionProvider>
+      <BusyIndicator />
       <CrmShell />
     </SessionProvider>
   )
@@ -55,7 +105,8 @@ function CrmShell() {
   const { theme, toggleTheme } = useTheme()
   const addons = useAddons(session.status === 'authenticated')
   const [section, setSection] = useState('dashboard')
-  const [createContactToken, setCreateContactToken] = useState(0)
+  const [createRequest, setCreateRequest] = useState<{ id: string; token: number } | null>(null)
+  const [quickOpen, setQuickOpen] = useState(false)
   const [headerQuery, setHeaderQuery] = useState('')
   const [phoneOpen, setPhoneOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
@@ -79,6 +130,15 @@ function CrmShell() {
     setHeaderQuery('')
     setSection(id)
     setNavOpen(false)
+    setQuickOpen(false)
+  }
+
+  function quickCreate(id: string) {
+    setHeaderQuery('')
+    setCreateRequest({ id, token: Date.now() })
+    setSection(id)
+    setNavOpen(false)
+    setQuickOpen(false)
   }
 
   function openAddon(target: string) {
@@ -103,6 +163,15 @@ function CrmShell() {
   }, [])
 
   useEffect(() => {
+    if (!quickOpen) return
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setQuickOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [quickOpen])
+
+  useEffect(() => {
     if (!navOpen) return
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -118,8 +187,10 @@ function CrmShell() {
 
   if (session.status === 'loading') {
     return (
-      <div className="min-h-screen grid place-items-center bg-slate-100 text-sm text-slate-600">
-        در حال بررسی نشست...
+      <div className="vision-app min-h-screen grid place-items-center">
+        <div className="glass-card rounded-[28px] px-10 py-8 flex flex-col items-center gap-4" role="status" aria-live="polite">
+          <LoadingMark label="در حال بررسی نشست..." large />
+        </div>
       </div>
     )
   }
@@ -169,6 +240,7 @@ function CrmShell() {
         {/* Nav */}
         <nav className="flex-1 p-3 flex flex-col gap-0.5 overflow-y-auto">
           <SidebarItem icon={LayoutDashboard} label="داشبورد" active={section === 'dashboard'} onClick={() => openSection('dashboard')} />
+          <QuickMenu open={quickOpen} onToggle={() => setQuickOpen((current) => !current)} onPick={quickCreate} />
           {groupOrder.map((group) => (
             <div key={group}>
               <div className="my-3 px-3">
@@ -306,10 +378,7 @@ function CrmShell() {
           {section === 'dashboard' && (
             <DashboardView
               onOpen={openSection}
-              onCreateContact={() => {
-                setCreateContactToken((current) => current + 1)
-                openSection('contacts')
-              }}
+              onCreateContact={() => quickCreate('contacts')}
             />
           )}
           {section === 'settings' && <SettingsView onOpen={openSection} />}
@@ -331,7 +400,7 @@ function CrmShell() {
             <ModuleView
               key={section}
               moduleId={section}
-              openCreateToken={section === 'contacts' ? createContactToken : 0}
+              openCreateToken={createRequest?.id === section ? createRequest.token : 0}
               externalQuery={headerQuery}
               onOpenModule={openSection}
               onQueryChange={setHeaderQuery}

@@ -7,5 +7,5 @@ export type HostUsage = {
 }
 
 export function hostUsage() {
-  return api<HostUsage>('/api/host')
+  return api<HostUsage>('/api/host', { quiet: true })
 }
