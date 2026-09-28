@@ -1,0 +1,11 @@
+{
+  "id": "ciwa-phone",
+  "name": "تلفن سازمانی",
+  "version": "1.0.0",
+  "description": "تلفن درون‌برنامه‌ای با شماره‌گیر، تماس ورودی و خروجی، انتقال، کنفرانس، ضبط، صف انتظار و صندوق صوتی.",
+  "navLabel": "تلفن",
+  "icon": "phone",
+  "widget": "softphone",
+  "recordLabel": "تماس",
+  "fields": []
+}
