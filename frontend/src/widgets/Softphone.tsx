@@ -1,17 +1,27 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import JsSIP from 'jssip'
 import {
-  Delete, Grip, History, Mic, MicOff, Pause, Phone, PhoneForwarded,
-  PhoneIncoming, PhoneOff, Play, Search, Settings, Square, UserRound, Users, Video, VideoOff, Voicemail, Volume2, VolumeX, X,
+  Delete, Grip, History, Mic, MicOff, Pause, Phone, PhoneIncoming, PhoneOff,
+  Play, Search, Settings, UserRound, X,
 } from 'lucide-react'
+import {
+  getPhoneCredentials,
+  getPhoneSettings,
+  getPhoneStatus,
+  listPhoneCdr,
+  listPhoneExtensions,
+  originatePhoneCall,
+  savePhoneSettings,
+  type PhoneCdr,
+  type PhonePerson,
+  type PhoneSettings,
+} from '../addons/phoneApi'
+import { ApiError } from '../api/client'
+import { listContacts } from '../api/records'
 import { SectionHelp } from '../help/SectionHelp'
 
-type Presence = 'available' | 'away' | 'busy' | 'dnd'
-type Tab = 'pad' | 'people' | 'history' | 'mail' | 'more'
+type Tab = 'pad' | 'people' | 'history' | 'settings'
 type Phase = 'dialing' | 'ringing' | 'active' | 'held'
-
-type Person = { ext: string, name: string, presence: Presence, dept: string }
-type HistoryItem = { id: string, direction: 'in' | 'out' | 'missed', name: string, number: string, at: number, seconds: number }
-type Mail = { id: string, name: string, number: string, seconds: number, at: number, heard: boolean }
 type LiveCall = {
   id: string
   direction: 'in' | 'out'
@@ -20,67 +30,64 @@ type LiveCall = {
   phase: Phase
   connectedAt: number | null
   muted: boolean
-  recording: boolean
-  video: boolean
   speaker: boolean
-  conference: string[]
+  mode: 'originate' | 'webrtc' | 'local'
 }
-type Parked = { slot: string, name: string, number: string } | null
-
-const PRESENCE: { id: Presence, label: string, color: string }[] = [
-  { id: 'available', label: 'آماده', color: '#34d399' },
-  { id: 'away', label: 'خارج از دسترس', color: '#fbbf24' },
-  { id: 'busy', label: 'مشغول', color: '#fb7185' },
-  { id: 'dnd', label: 'مزاحم نشوید', color: '#c084fc' },
-]
-
-const DIRECTORY: Person[] = [
-  { ext: '100', name: 'سارا محمدی', presence: 'available', dept: 'فروش' },
-  { ext: '101', name: 'حسین مهرجو', presence: 'away', dept: 'مدیریت' },
-  { ext: '102', name: 'مریم کاظمی', presence: 'busy', dept: 'پشتیبانی' },
-  { ext: '103', name: 'علی رضایی', presence: 'available', dept: 'مالی' },
-  { ext: '104', name: 'فاطمه حسینی', presence: 'dnd', dept: 'بازاریابی' },
-  { ext: '105', name: 'رضا نوری', presence: 'available', dept: 'فروش' },
-  { ext: '110', name: 'صف فروش', presence: 'available', dept: 'صف' },
-  { ext: '800', name: 'صندوق صوتی', presence: 'available', dept: 'سیستم' },
-]
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#']
-const STORAGE = 'ciwa-phone'
+const HISTORY_KEY = 'ciwa-phone-history'
+const LETTERS: Record<string, string> = {
+  '2': 'ABC', '3': 'DEF', '4': 'GHI', '5': 'JKL', '6': 'MNO', '7': 'PQRS', '8': 'TUV', '9': 'WXYZ',
+}
 
 function fa(value: string | number) {
   return String(value).replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)])
 }
 
+function normalizeDial(value: string | undefined | null) {
+  return String(value || '').replace(/[^\d+*#]/g, '').replace(/^00/, '+').slice(0, 24)
+}
+
 function clock(totalSeconds: number) {
   const safe = Math.max(0, totalSeconds)
-  const minutes = Math.floor(safe / 60)
-  const seconds = safe % 60
-  return fa(`${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`)
+  return fa(`${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`)
 }
 
-function lookup(number: string) {
-  return DIRECTORY.find((person) => person.ext === number)?.name || number
-}
-
-function tone(frequency: number, duration = 0.08) {
-  const audio = new AudioContext()
-  const oscillator = audio.createOscillator()
-  const gain = audio.createGain()
-  oscillator.frequency.value = frequency
-  gain.gain.value = 0.03
-  oscillator.connect(gain).connect(audio.destination)
-  oscillator.start()
-  oscillator.stop(audio.currentTime + duration)
-  oscillator.onended = () => void audio.close()
-}
-
-function loadHistory(): HistoryItem[] {
+function tone(frequency: number, duration = 0.07) {
   try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE) || '[]')
+    const audio = new AudioContext()
+    const oscillator = audio.createOscillator()
+    const gain = audio.createGain()
+    oscillator.frequency.value = frequency
+    gain.gain.value = 0.03
+    oscillator.connect(gain).connect(audio.destination)
+    oscillator.start()
+    oscillator.stop(audio.currentTime + duration)
+    oscillator.onended = () => void audio.close()
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadLocalHistory(): PhoneCdr[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]')
     return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
+  }
+}
+
+function emptySettings(): PhoneSettings {
+  return {
+    apiUrl: 'http://127.0.0.1:8788',
+    extension: '',
+    secret: '',
+    displayName: '',
+    sipHost: '',
+    wssUrl: '',
+    mode: 'originate',
+    hasSecret: false,
   }
 }
 
@@ -88,26 +95,75 @@ export function Softphone({ open, onOpenChange }: { open: boolean, onOpenChange:
   const [tab, setTab] = useState<Tab>('pad')
   const [digits, setDigits] = useState('')
   const [query, setQuery] = useState('')
-  const [presence, setPresence] = useState<Presence>('available')
   const [call, setCall] = useState<LiveCall | null>(null)
   const [now, setNow] = useState(Date.now())
-  const [history, setHistory] = useState<HistoryItem[]>(loadHistory)
-  const [mail, setMail] = useState<Mail[]>([
-    { id: 'v1', name: 'سارا محمدی', number: '100', seconds: 18, at: Date.now() - 3600_000, heard: false },
-    { id: 'v2', name: 'مشتری ویترین', number: '09121001010', seconds: 26, at: Date.now() - 86_400_000, heard: true },
-  ])
-  const [queue, setQueue] = useState([
-    { id: 'q1', name: 'مشتری ویترین', number: '09121001010' },
-    { id: 'q2', name: 'شرکت آریا', number: '02188776655' },
-  ])
-  const [parks, setParks] = useState<Parked[]>([null, null, null, null, null])
-  const [transferOpen, setTransferOpen] = useState(false)
-  const [transferTo, setTransferTo] = useState('')
-  const [keypadOpen, setKeypadOpen] = useState(false)
-  const [conferenceOpen, setConferenceOpen] = useState(false)
-  const [conferenceTo, setConferenceTo] = useState('')
-  const [ringtone, setRingtone] = useState(true)
+  const [clockText, setClockText] = useState('')
+  const [history, setHistory] = useState<PhoneCdr[]>(loadLocalHistory)
+  const [people, setPeople] = useState<PhonePerson[]>([])
+  const [settings, setSettings] = useState<PhoneSettings>(emptySettings)
+  const [draft, setDraft] = useState<PhoneSettings>(emptySettings)
+  const [statusLine, setStatusLine] = useState('در حال اتصال به CIWA Telecom...')
+  const [registered, setRegistered] = useState(false)
   const [notice, setNotice] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const uaRef = useRef<InstanceType<typeof JsSIP.UA> | null>(null)
+  const sessionRef = useRef<any>(null)
+  const remoteAudio = useRef<HTMLAudioElement | null>(null)
+
+  const elapsed = call?.connectedAt ? Math.floor((now - call.connectedAt) / 1000) : 0
+  const missed = history.filter((item) => item.direction === 'in' && item.disposition === 'missed').length
+  const filteredPeople = useMemo(() => {
+    const text = query.trim()
+    return people.filter((person) => {
+      if (!text) return true
+      return person.name.includes(text)
+        || person.number.includes(text)
+        || (person.subtitle || '').includes(text)
+    })
+  }, [people, query])
+
+  useEffect(() => {
+    remoteAudio.current = new Audio()
+    remoteAudio.current.autoplay = true
+    return () => {
+      remoteAudio.current?.pause()
+      remoteAudio.current = null
+      stopUa()
+    }
+  }, [])
+
+  useEffect(() => {
+    const tick = () => {
+      setClockText(new Intl.DateTimeFormat('fa-IR', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()))
+      setNow(Date.now())
+    }
+    tick()
+    const timer = window.setInterval(tick, 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 40)))
+  }, [history])
+
+  useEffect(() => {
+    void bootstrap()
+  }, [])
+
+  useEffect(() => {
+    if (tab !== 'people') return
+    let active = true
+    const timer = window.setTimeout(() => {
+      void loadDirectory(query).then((items) => {
+        if (active) setPeople(items)
+      }).catch(() => undefined)
+    }, 280)
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
+  }, [query, tab])
 
   useEffect(() => {
     if (!call || (call.phase !== 'active' && call.phase !== 'held')) return
@@ -116,86 +172,264 @@ export function Softphone({ open, onOpenChange }: { open: boolean, onOpenChange:
   }, [call])
 
   useEffect(() => {
-    if (!ringtone || call?.phase !== 'ringing') return
-    tone(880, 0.18)
-    const timer = window.setInterval(() => tone(880, 0.18), 1400)
+    if (call?.phase !== 'ringing') return
+    tone(880, 0.16)
+    const timer = window.setInterval(() => tone(880, 0.16), 1400)
     return () => window.clearInterval(timer)
-  }, [call?.phase, ringtone])
+  }, [call?.phase])
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE, JSON.stringify(history.slice(0, 40)))
-  }, [history])
-
-  const elapsed = call?.connectedAt ? Math.floor((now - call.connectedAt) / 1000) : 0
-  const people = useMemo(() => {
-    const text = query.trim()
-    return DIRECTORY.filter((person) => !text || person.name.includes(text) || person.ext.includes(text) || person.dept.includes(text))
-  }, [query])
-  const missed = history.filter((item) => item.direction === 'missed').length
-  const unheard = mail.filter((item) => !item.heard).length
-
-  function pushHistory(item: Omit<HistoryItem, 'id' | 'at'>) {
-    setHistory((current) => [{ ...item, id: crypto.randomUUID(), at: Date.now() }, ...current].slice(0, 40))
+  async function bootstrap() {
+    try {
+      const current = await getPhoneSettings()
+      setSettings(current)
+      setDraft({ ...current, secret: '' })
+      await refreshLink(current)
+    } catch (caught) {
+      setStatusLine(caught instanceof ApiError ? caught.message : 'تنظیمات تلفن خوانده نشد.')
+    }
   }
 
-  function finish(direction: HistoryItem['direction'], seconds = elapsed) {
-    if (!call) return
-    pushHistory({ direction, name: call.name, number: call.number, seconds })
-    setCall(null)
-    setTransferOpen(false)
-    setKeypadOpen(false)
-    setConferenceOpen(false)
+  async function refreshLink(current = settings) {
+    try {
+      const status = await getPhoneStatus()
+      const connected = status.telecom?.connected
+      const amiError = status.telecom?.amiError
+      if (!status.configured) setStatusLine('داخلی و نشانی CIWA Telecom را در تنظیمات وارد کنید.')
+      else if (connected) setStatusLine(`وصل به ${status.telecom.product || 'CIWA Telecom'} · هسته آماده`)
+      else setStatusLine(`API وصل است · هسته: ${amiError || 'قطع'}`)
+      setPeople(await loadDirectory())
+      const cdr = await listPhoneCdr().catch(() => ({ items: [] as PhoneCdr[] }))
+      if (cdr.items?.length) {
+        setHistory((local) => {
+          const merged = [...cdr.items, ...local]
+          const seen = new Set<string>()
+          return merged.filter((item) => {
+            const key = `${item.number}-${item.at}`
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+          }).slice(0, 40)
+        })
+      }
+      if (current.mode === 'webrtc' && current.extension && current.hasSecret) {
+        await startUa()
+      } else {
+        stopUa()
+        setRegistered(false)
+      }
+    } catch (caught) {
+      setStatusLine(caught instanceof ApiError ? caught.message : 'CIWA Telecom در دسترس نیست.')
+      setPeople(await loadDirectory().catch(() => []))
+      stopUa()
+      setRegistered(false)
+    }
   }
 
-  function startOutbound(number: string) {
-    const target = number.trim()
-    if (!target || call) return
-    if (presence === 'dnd') {
-      setNotice('وضعیت مزاحم نشوید است. برای تماس، وضعیت را عوض کنید.')
-      return
-    }
-    const parked = parks.find((item) => item?.slot === target || item?.number === target)
-    if (parked) {
-      setCall({
-        id: crypto.randomUUID(), direction: 'out', number: parked.number, name: parked.name,
-        phase: 'active', connectedAt: Date.now(), muted: false, recording: false, video: false, speaker: true, conference: [],
-      })
-      setParks((current) => current.map((item) => item?.number === parked.number ? null : item))
-      setTab('pad')
-      setNotice('')
-      return
-    }
-    setCall({
-      id: crypto.randomUUID(), direction: 'out', number: target, name: lookup(target),
-      phase: 'dialing', connectedAt: null, muted: false, recording: false, video: false, speaker: true, conference: [],
+  async function loadDirectory(search = query): Promise<PhonePerson[]> {
+    const contacts = await listContacts({ page: 1, query: search, size: 100 }).catch(() => ({ records: [] as Awaited<ReturnType<typeof listContacts>>['records'] }))
+    const fromCrm: PhonePerson[] = contacts.records.flatMap((record) => {
+      const name = [record.attributes.first_name, record.attributes.last_name].filter(Boolean).join(' ').trim() || 'بدون نام'
+      const phones = [record.attributes.phone_mobile, record.attributes.phone_work]
+        .map((value) => normalizeDial(value))
+        .filter(Boolean)
+      const unique = [...new Set(phones)]
+      if (!unique.length) {
+        return [{
+          id: `contact-${record.id}`,
+          number: '',
+          name,
+          kind: 'contact' as const,
+          subtitle: record.attributes.title || record.attributes.email1 || 'بدون شماره',
+        }]
+      }
+      return unique.map((number, index) => ({
+        id: `contact-${record.id}-${index}`,
+        number,
+        name,
+        kind: 'contact' as const,
+        subtitle: number === normalizeDial(record.attributes.phone_mobile) ? 'موبایل' : 'تلفن',
+      }))
     })
+
+    const directory = await listPhoneExtensions().catch(() => ({ items: [] as PhonePerson[] }))
+    const fromExt: PhonePerson[] = (directory.items || []).map((item) => ({
+      ...item,
+      kind: 'extension' as const,
+      subtitle: item.subtitle || 'داخلی مرکز تلفن',
+    }))
+
+    const seen = new Set<string>()
+    return [...fromCrm, ...fromExt].filter((person) => {
+      const key = `${person.kind}-${person.number || person.id}-${person.name}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }
+
+  function stopUa() {
+    try { sessionRef.current?.terminate?.() } catch { /* ignore */ }
+    sessionRef.current = null
+    try { uaRef.current?.stop() } catch { /* ignore */ }
+    uaRef.current = null
+    setRegistered(false)
+  }
+
+  async function startUa() {
+    stopUa()
+    const credentials = await getPhoneCredentials()
+    if (credentials.mode !== 'webrtc') return
+    const socket = new JsSIP.WebSocketInterface(credentials.wssUrl)
+    const ua = new JsSIP.UA({
+      sockets: [socket],
+      uri: credentials.sipUri,
+      password: credentials.secret,
+      display_name: credentials.displayName,
+      register: true,
+      session_timers: false,
+    })
+    ua.on('registered', () => {
+      setRegistered(true)
+      setStatusLine(`WebRTC ثبت شد · داخلی ${fa(credentials.extension)}`)
+    })
+    ua.on('unregistered', () => setRegistered(false))
+    ua.on('registrationFailed', (event: { cause?: string }) => {
+      setRegistered(false)
+      setStatusLine(`ثبت WebRTC ناموفق: ${event.cause || 'خطا'}`)
+    })
+    ua.on('newRTCSession', (event: { originator: string, session: any }) => {
+      const session = event.session
+      sessionRef.current = session
+      bindSession(session)
+      if (event.originator === 'remote') {
+        const number = String(session.remote_identity?.uri?.user || '')
+        setCall({
+          id: crypto.randomUUID(),
+          direction: 'in',
+          number,
+          name: lookup(number),
+          phase: 'ringing',
+          connectedAt: null,
+          muted: false,
+          speaker: true,
+          mode: 'webrtc',
+        })
+        onOpenChange(true)
+        setTab('pad')
+      }
+    })
+    ua.start()
+    uaRef.current = ua
+  }
+
+  function bindSession(session: any) {
+    session.on('peerconnection', (data: { peerconnection: RTCPeerConnection }) => {
+      data.peerconnection.addEventListener('track', (event) => {
+        if (remoteAudio.current && event.streams[0]) {
+          remoteAudio.current.srcObject = event.streams[0]
+          void remoteAudio.current.play().catch(() => undefined)
+        }
+      })
+    })
+    session.on('accepted', () => {
+      setCall((current) => current ? { ...current, phase: 'active', connectedAt: Date.now() } : current)
+    })
+    session.on('confirmed', () => {
+      setCall((current) => current ? { ...current, phase: 'active', connectedAt: current.connectedAt || Date.now() } : current)
+    })
+    session.on('ended', () => finishCurrent('out'))
+    session.on('failed', () => finishCurrent('missed'))
+  }
+
+  function lookup(number: string) {
+    return people.find((person) => person.number === number)?.name || number
+  }
+
+  function pushHistory(item: Omit<PhoneCdr, 'id'>) {
+    setHistory((current) => [{ ...item, id: crypto.randomUUID() }, ...current].slice(0, 40))
+  }
+
+  function finishCurrent(direction: 'in' | 'out' | 'missed') {
+    setCall((current) => {
+      if (!current) return null
+      pushHistory({
+        name: current.name,
+        number: current.number,
+        direction: direction === 'missed' ? 'in' : current.direction,
+        seconds: current.connectedAt ? Math.floor((Date.now() - current.connectedAt) / 1000) : 0,
+        at: Date.now(),
+        disposition: direction === 'missed' ? 'missed' : 'answered',
+      })
+      return null
+    })
+    sessionRef.current = null
+  }
+
+  async function startOutbound(number: string) {
+    const target = normalizeDial(number)
+    if (!target || call) {
+      if (!target) setNotice('برای این مخاطب شماره‌ای ثبت نشده است.')
+      return
+    }
+    const name = lookup(target)
     setDigits('')
     setNotice('')
+    setTab('pad')
+
+    if (settings.mode === 'webrtc' && uaRef.current && registered) {
+      const credentials = await getPhoneCredentials()
+      const session = uaRef.current.call(`sip:${target}@${credentials.sipHost}`, {
+        mediaConstraints: { audio: true, video: false },
+        pcConfig: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+      })
+      sessionRef.current = session
+      bindSession(session)
+      setCall({
+        id: crypto.randomUUID(), direction: 'out', number: target, name,
+        phase: 'dialing', connectedAt: null, muted: false, speaker: true, mode: 'webrtc',
+      })
+      return
+    }
+
+    if (settings.extension && settings.apiUrl) {
+      setCall({
+        id: crypto.randomUUID(), direction: 'out', number: target, name,
+        phase: 'dialing', connectedAt: null, muted: false, speaker: true, mode: 'originate',
+      })
+      try {
+        await originatePhoneCall(target)
+        setCall((current) => current && current.number === target
+          ? { ...current, phase: 'active', connectedAt: Date.now() }
+          : current)
+        setNotice(`تماس از داخلی ${fa(settings.extension)} در CIWA Telecom شروع شد. گوشی یا کلاینت همان داخلی را بردارید.`)
+      } catch (caught) {
+        setCall(null)
+        setNotice(caught instanceof ApiError ? caught.message : 'شروع تماس از مرکز تلفن ناموفق بود.')
+      }
+      return
+    }
+
+    setCall({
+      id: crypto.randomUUID(), direction: 'out', number: target, name,
+      phase: 'dialing', connectedAt: null, muted: false, speaker: true, mode: 'local',
+    })
+    setNotice('تنظیمات CIWA Telecom کامل نیست؛ این تماس فقط محلی است.')
     window.setTimeout(() => {
       setCall((current) => current && current.phase === 'dialing' && current.number === target
         ? { ...current, phase: 'active', connectedAt: Date.now() }
         : current)
-    }, 1200)
+    }, 900)
   }
 
-  function offerIncoming(name: string, number: string, queueId?: string) {
-    if (call) {
-      setNotice('اول مکالمهٔ فعلی را تمام کنید.')
-      return
-    }
-    if (queueId) setQueue((current) => current.filter((item) => item.id !== queueId))
-    setCall({
-      id: crypto.randomUUID(), direction: 'in', number, name,
-      phase: 'ringing', connectedAt: null, muted: false, recording: false, video: false, speaker: true, conference: [],
-    })
-    onOpenChange(true)
-    setNotice('')
+  function hangup() {
+    try { sessionRef.current?.terminate?.() } catch { /* ignore */ }
+    finishCurrent(call?.direction === 'in' ? 'in' : 'out')
   }
 
   function press(key: string) {
-    if (call && keypadOpen) {
+    if (call && call.phase !== 'ringing') {
       tone(440 + key.charCodeAt(0))
-      setDigits((current) => (current + key).slice(0, 24))
+      try { sessionRef.current?.sendDTMF?.(key) } catch { /* ignore */ }
       return
     }
     if (call) return
@@ -203,13 +437,43 @@ export function Softphone({ open, onOpenChange }: { open: boolean, onOpenChange:
     setDigits((current) => (current + key).slice(0, 18))
   }
 
-  function parkCall(index: number) {
-    if (!call || call.phase === 'ringing' || call.phase === 'dialing') return
-    const slot = String(701 + index)
-    setParks((current) => current.map((item, itemIndex) => itemIndex === index ? { slot, name: call.name, number: call.number } : item))
-    pushHistory({ direction: call.direction === 'in' ? 'in' : 'out', name: call.name, number: call.number, seconds: elapsed })
-    setCall(null)
-    setNotice(`تماس در جایگاه ${fa(slot)} پارک شد.`)
+  async function saveSettingsForm() {
+    setSaving(true)
+    setNotice('')
+    try {
+      const payload: Partial<PhoneSettings> = {
+        apiUrl: draft.apiUrl,
+        extension: draft.extension,
+        displayName: draft.displayName,
+        sipHost: draft.sipHost,
+        wssUrl: draft.wssUrl,
+        mode: draft.mode,
+      }
+      if (draft.secret && draft.secret !== '********') payload.secret = draft.secret
+      const saved = await savePhoneSettings(payload)
+      setSettings(saved)
+      setDraft({ ...saved, secret: '' })
+      setNotice('تنظیمات CIWA Telecom ذخیره شد.')
+      await refreshLink(saved)
+    } catch (caught) {
+      setNotice(caught instanceof ApiError ? caught.message : 'ذخیره تنظیمات ناموفق بود.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function testSettings() {
+    setTesting(true)
+    setNotice('')
+    try {
+      if (draft.apiUrl !== settings.apiUrl || draft.extension !== settings.extension) {
+        await saveSettingsForm()
+      }
+      await refreshLink()
+      setNotice('آزمایش اتصال انجام شد.')
+    } finally {
+      setTesting(false)
+    }
   }
 
   const dockActive = call?.phase === 'active' || call?.phase === 'held' || call?.phase === 'dialing'
@@ -221,13 +485,14 @@ export function Softphone({ open, onOpenChange }: { open: boolean, onOpenChange:
         type="button"
         aria-label="باز کردن تلفن"
         onClick={() => onOpenChange(true)}
-        className={`phone-dock fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-40 w-14 h-14 rounded-full text-white shadow-lg grid place-items-center ${dockRinging ? 'phone-dock-ring' : ''}`}
-        style={{ background: 'linear-gradient(135deg, #e879f9, #6366f1 55%, #3b82f6)' }}
+        className={`iphone-dock phone-dock fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-40 ${dockRinging ? 'phone-dock-ring' : ''}`}
       >
-        {dockRinging ? <PhoneIncoming size={22} /> : <Phone size={22} />}
-        {(dockActive || missed > 0 || unheard > 0) && (
-          <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-rose-500 text-[10px] leading-5 text-center">
-            {dockActive ? clock(elapsed) : fa(missed + unheard)}
+        <span className="iphone-dock-screen">
+          {dockRinging ? <PhoneIncoming size={20} /> : <Phone size={20} />}
+        </span>
+        {(dockActive || missed > 0) && (
+          <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-[#ff3b30] text-[10px] leading-5 text-center text-white">
+            {dockActive ? clock(elapsed) : fa(missed)}
           </span>
         )}
       </button>
@@ -235,187 +500,180 @@ export function Softphone({ open, onOpenChange }: { open: boolean, onOpenChange:
   }
 
   return (
-    <section
-      className="glass-card fixed bottom-3 left-3 right-3 z-40 w-auto max-h-[calc(100vh-1.5rem)] rounded-[28px] flex flex-col overflow-hidden sm:bottom-6 sm:left-6 sm:right-auto sm:w-[22.5rem] sm:max-w-[calc(100vw-3rem)] sm:max-h-[calc(100vh-3rem)]"
-      style={{ fontFamily: "'Vazirmatn', sans-serif" }}
-      aria-label="تلفن"
-    >
-      <header className="theme-banner px-4 pt-4 pb-3 flex items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-bold text-white">تلفن</p>
-            <SectionHelp topic="phone" tone="banner" />
-          </div>
-          <p className="text-[11px] text-white/80 mt-0.5">داخلی {fa(201)} · {PRESENCE.find((item) => item.id === presence)?.label}</p>
+    <section className="iphone-frame fixed bottom-3 left-3 right-3 z-40 mx-auto w-auto max-w-[22rem] sm:bottom-6 sm:left-6 sm:right-auto sm:mx-0" aria-label="تلفن">
+      <div className="iphone-bezel">
+        <div className="iphone-island" aria-hidden="true" />
+        <div className="iphone-status">
+          <span>{clockText || '—'}</span>
+          <span className="iphone-status-right">
+            <span className={`iphone-signal ${registered || settings.extension ? 'on' : ''}`} />
+            <span className="iphone-wifi" aria-hidden="true" />
+            <span className="iphone-battery" />
+          </span>
         </div>
-        <label className="text-[11px] text-white/80">
-          <span className="sr-only">وضعیت حضور</span>
-          <select
-            value={presence}
-            onChange={(event) => setPresence(event.target.value as Presence)}
-            className="rounded-xl bg-white/15 border border-white/20 px-2 py-1 text-white"
-          >
-            {PRESENCE.map((item) => <option key={item.id} value={item.id} className="text-slate-800">{item.label}</option>)}
-          </select>
-        </label>
-        <button type="button" aria-label="بستن" onClick={() => onOpenChange(false)} className="w-8 h-8 rounded-xl grid place-items-center text-white/90 hover:bg-white/15">
-          <X size={16} />
-        </button>
-      </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3 min-h-0">
-        {notice && <p className="text-xs text-slate-600 bg-white/40 rounded-xl px-3 py-2">{notice}</p>}
-        {call && tab !== 'pad' && call.phase !== 'ringing' && (
-          <button type="button" onClick={() => setTab('pad')} className="rounded-xl px-3 py-2 text-xs text-white text-right" style={{ background: 'linear-gradient(135deg,#e879f9,#6366f1)' }}>
-            بازگشت به مکالمه · {call.connectedAt ? clock(elapsed) : 'در حال اتصال'}
-          </button>
-        )}
-        {call && (tab === 'pad' || call.phase === 'ringing') ? (
-          <CallStage
-            call={call}
-            elapsed={elapsed}
-            digits={digits}
-            keypadOpen={keypadOpen}
-            transferOpen={transferOpen}
-            transferTo={transferTo}
-            conferenceOpen={conferenceOpen}
-            conferenceTo={conferenceTo}
-            onDigits={press}
-            onBackspace={() => setDigits((current) => current.slice(0, -1))}
-            onToggle={(key) => setCall((current) => current ? { ...current, [key]: !current[key] } : current)}
-            onHold={() => setCall((current) => current ? { ...current, phase: current.phase === 'held' ? 'active' : 'held' } : current)}
-            onHangup={() => finish(call.direction === 'in' ? 'in' : 'out')}
-            onAnswer={() => setCall((current) => current ? { ...current, phase: 'active', connectedAt: Date.now() } : current)}
-            onDecline={() => finish('missed', 0)}
-            onKeypad={() => setKeypadOpen((current) => !current)}
-            onTransfer={() => setTransferOpen((current) => !current)}
-            onTransferTo={setTransferTo}
-            onBlindTransfer={() => {
-              if (!transferTo.trim()) return
-              setNotice(`تماس به ${fa(transferTo)} منتقل شد.`)
-              finish(call.direction === 'in' ? 'in' : 'out')
-            }}
-            onAttended={() => {
-              if (!transferTo.trim()) return
-              setCall((current) => current ? { ...current, phase: 'held' } : current)
-              setNotice(`در حال مشاوره با ${lookup(transferTo)}. برای تکمیل، انتقال را بزنید.`)
-            }}
-            onConference={() => setConferenceOpen((current) => !current)}
-            onConferenceTo={setConferenceTo}
-            onAddConference={() => {
-              const name = lookup(conferenceTo.trim())
-              if (!conferenceTo.trim() || !call) return
-              setCall((current) => current ? { ...current, conference: [...current.conference, name] } : current)
-              setConferenceTo('')
-              setConferenceOpen(false)
-            }}
-          />
-        ) : tab === 'pad' ? (
-          <Pad digits={digits} onPress={press} onBackspace={() => setDigits((current) => current.slice(0, -1))} onCall={() => startOutbound(digits)} />
-        ) : tab === 'people' ? (
-          <People query={query} onQuery={setQuery} people={people} onCall={(ext) => startOutbound(ext)} />
-        ) : tab === 'history' ? (
-          <HistoryList items={history} onCall={startOutbound} />
-        ) : tab === 'mail' ? (
-          <Mailbox items={mail} onToggle={(id) => setMail((current) => current.map((item) => item.id === id ? { ...item, heard: true } : item))} onCall={startOutbound} />
-        ) : (
-          <More
-            queue={queue}
-            parks={parks}
-            ringtone={ringtone}
-            onRingtone={setRingtone}
-            onPickup={(item) => offerIncoming(item.name, item.number, item.id)}
-            onPark={parkCall}
-            onRetrieve={(slot) => startOutbound(slot)}
-          />
-        )}
+        <div className="iphone-screen">
+          <header className="flex items-center justify-between px-1 pb-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className="text-[15px] font-semibold text-white">تلفن</p>
+                <SectionHelp topic="phone" tone="banner" />
+              </div>
+              <p className="text-[10px] text-white/55 mt-0.5 truncate">{statusLine}</p>
+            </div>
+            <button type="button" aria-label="بستن" onClick={() => onOpenChange(false)} className="w-8 h-8 rounded-full bg-white/10 text-white/80 grid place-items-center">
+              <X size={14} />
+            </button>
+          </header>
+
+          {notice && <p className="mb-2 rounded-2xl bg-white/10 px-3 py-2 text-[11px] leading-5 text-white/80">{notice}</p>}
+
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {call && (tab === 'pad' || call.phase === 'ringing') ? (
+              <CallStage
+                call={call}
+                elapsed={elapsed}
+                onMute={() => {
+                  const next = !call.muted
+                  try {
+                    if (next) sessionRef.current?.mute?.({ audio: true })
+                    else sessionRef.current?.unmute?.({ audio: true })
+                  } catch { /* ignore */ }
+                  setCall({ ...call, muted: next })
+                }}
+                onHold={() => setCall({ ...call, phase: call.phase === 'held' ? 'active' : 'held' })}
+                onHangup={hangup}
+                onAnswer={() => {
+                  try { sessionRef.current?.answer?.({ mediaConstraints: { audio: true, video: false } }) } catch { /* ignore */ }
+                  setCall({ ...call, phase: 'active', connectedAt: Date.now() })
+                }}
+                onDecline={() => {
+                  try { sessionRef.current?.terminate?.() } catch { /* ignore */ }
+                  finishCurrent('missed')
+                }}
+                onDigits={press}
+              />
+            ) : tab === 'pad' ? (
+              <Pad digits={digits} onPress={press} onBackspace={() => setDigits((current) => current.slice(0, -1))} onCall={() => void startOutbound(digits)} />
+            ) : tab === 'people' ? (
+              <People query={query} onQuery={setQuery} people={filteredPeople} onCall={(ext) => void startOutbound(ext)} />
+            ) : tab === 'history' ? (
+              <HistoryList items={history} onCall={(number) => void startOutbound(number)} />
+            ) : (
+              <SettingsPanel
+                draft={draft}
+                saving={saving}
+                testing={testing}
+                registered={registered}
+                onChange={setDraft}
+                onSave={() => void saveSettingsForm()}
+                onTest={() => void testSettings()}
+              />
+            )}
+          </div>
+
+          <nav className="iphone-tabbar">
+            <TabButton active={tab === 'pad'} label="صفحه‌کلید" onClick={() => setTab('pad')}><Grip size={18} /></TabButton>
+            <TabButton active={tab === 'people'} label="مخاطبین" onClick={() => setTab('people')}><UserRound size={18} /></TabButton>
+            <TabButton active={tab === 'history'} label="اخیر" badge={missed} onClick={() => setTab('history')}><History size={18} /></TabButton>
+            <TabButton active={tab === 'settings'} label="تنظیمات" onClick={() => setTab('settings')}><Settings size={18} /></TabButton>
+          </nav>
+          <div className="iphone-home" aria-hidden="true" />
+        </div>
       </div>
-
-      <nav className="grid grid-cols-5 border-t border-white/10 px-1 py-1">
-        <TabButton active={tab === 'pad'} label="شماره" onClick={() => setTab('pad')}>
-          <Grip size={16} />
-        </TabButton>
-        <TabButton active={tab === 'people'} label="داخلی‌ها" onClick={() => setTab('people')}>
-          <UserRound size={16} />
-        </TabButton>
-        <TabButton active={tab === 'history'} label="تاریخچه" badge={missed} onClick={() => setTab('history')}>
-          <History size={16} />
-        </TabButton>
-        <TabButton active={tab === 'mail'} label="صوتی" badge={unheard} onClick={() => setTab('mail')}>
-          <Voicemail size={16} />
-        </TabButton>
-        <TabButton active={tab === 'more'} label="بیشتر" onClick={() => setTab('more')}>
-          <Settings size={16} />
-        </TabButton>
-      </nav>
     </section>
   )
 }
 
 function TabButton({ active, label, badge, onClick, children }: { active: boolean, label: string, badge?: number, onClick: () => void, children: ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className={`relative flex flex-col items-center gap-0.5 py-2 text-[10px] ${active ? 'text-violet-600' : 'text-slate-400'}`}>
+    <button type="button" onClick={onClick} className={`relative flex flex-col items-center gap-0.5 text-[10px] ${active ? 'text-[#0a84ff]' : 'text-white/45'}`}>
       {children}
       {label}
-      {badge ? <span className="absolute top-1 left-3 min-w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] leading-4 px-1">{fa(badge)}</span> : null}
+      {badge ? <span className="absolute -top-0.5 left-3 min-w-4 h-4 rounded-full bg-[#ff3b30] text-white text-[9px] leading-4 px-1">{fa(badge)}</span> : null}
     </button>
   )
 }
 
 function Pad({ digits, onPress, onBackspace, onCall }: { digits: string, onPress: (key: string) => void, onBackspace: () => void, onCall: () => void }) {
   return (
-    <div className="flex flex-col gap-3">
-      <div className="h-12 flex items-center justify-center gap-2">
-        <p className="text-2xl font-semibold tracking-widest text-slate-800 min-h-8">{digits ? fa(digits) : <span className="text-sm text-slate-400 font-normal">شماره یا داخلی</span>}</p>
-        {digits && <button type="button" aria-label="پاک کردن" onClick={onBackspace} className="text-slate-400"><Delete size={16} /></button>}
+    <div className="flex h-full flex-col justify-end gap-4 pb-2">
+      <div className="min-h-14 flex items-center justify-center gap-2 px-2">
+        <p className="text-[34px] font-light tracking-[0.08em] text-white text-center break-all">{digits ? fa(digits) : ''}</p>
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-x-5 gap-y-3 place-items-center px-3">
         {KEYS.map((key) => (
-          <button key={key} type="button" onClick={() => onPress(key)} className="h-12 rounded-2xl bg-white/40 text-lg font-semibold text-slate-800 hover:bg-white/70">
-            {fa(key)}
+          <button key={key} type="button" onClick={() => onPress(key)} className="iphone-key">
+            <span className="iphone-key-digit">{fa(key)}</span>
+            {LETTERS[key] && <span className="iphone-key-letters">{LETTERS[key]}</span>}
           </button>
         ))}
       </div>
-      <button type="button" onClick={onCall} className="h-12 rounded-2xl text-white font-semibold flex items-center justify-center gap-2" style={{ background: 'linear-gradient(135deg, #34d399, #059669)' }}>
-        <Phone size={16} /> تماس
-      </button>
+      <div className="grid grid-cols-3 place-items-center px-3 pb-1">
+        <span />
+        <button type="button" aria-label="تماس" onClick={onCall} className="iphone-call">
+          <Phone size={28} fill="currentColor" />
+        </button>
+        {digits ? (
+          <button type="button" aria-label="پاک کردن" onClick={onBackspace} className="text-white/70"><Delete size={22} /></button>
+        ) : <span />}
+      </div>
     </div>
   )
 }
 
-function People({ query, onQuery, people, onCall }: { query: string, onQuery: (value: string) => void, people: Person[], onCall: (ext: string) => void }) {
+function People({ query, onQuery, people, onCall }: { query: string, onQuery: (value: string) => void, people: PhonePerson[], onCall: (ext: string) => void }) {
+  const contacts = people.filter((person) => person.kind !== 'extension')
+  const extensions = people.filter((person) => person.kind === 'extension')
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 pt-1">
       <div className="relative">
-        <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="جستجوی داخلی" aria-label="جستجوی داخلی" className="glass-input w-full rounded-xl pr-8 pl-3 py-2 text-sm" />
+        <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/35" />
+        <input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="جستجو در مخاطبین" aria-label="جستجوی مخاطب" className="iphone-input pr-8" />
       </div>
-      {people.map((person) => (
-        <div key={person.ext} className="flex items-center gap-2 rounded-xl px-1 py-1">
-          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: PRESENCE.find((item) => item.id === person.presence)?.color }} />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm text-slate-800 truncate">{person.name}</p>
-            <p className="text-[11px] text-slate-400">{person.dept} · {fa(person.ext)}</p>
-          </div>
-          <button type="button" aria-label={`تماس با ${person.name}`} onClick={() => onCall(person.ext)} className="w-8 h-8 rounded-full grid place-items-center text-white" style={{ background: 'linear-gradient(135deg, #34d399, #059669)' }}>
-            <Phone size={14} />
-          </button>
-        </div>
+      {people.length === 0 && <p className="text-center text-xs text-white/45 py-10">مخاطبی در نرم‌افزار نیست. از بخش مخاطبین اضافه کنید.</p>}
+      {contacts.length > 0 && <p className="px-1 text-[10px] uppercase tracking-wide text-white/40">مخاطبین CRM</p>}
+      {contacts.map((person) => (
+        <button
+          key={person.id || person.number}
+          type="button"
+          onClick={() => onCall(person.number)}
+          disabled={!person.number}
+          className="flex items-center gap-3 rounded-2xl px-2 py-2 text-right hover:bg-white/5 disabled:opacity-40"
+        >
+          <span className="w-10 h-10 rounded-full bg-[#3a3a3c] text-white grid place-items-center text-sm font-semibold">{person.name.slice(0, 1)}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] text-white truncate">{person.name}</span>
+            <span className="block text-[11px] text-white/45">{person.number ? fa(person.number) : person.subtitle || 'بدون شماره'}{person.number && person.subtitle ? ` · ${person.subtitle}` : ''}</span>
+          </span>
+          <Phone size={16} className="text-[#30d158]" />
+        </button>
+      ))}
+      {extensions.length > 0 && <p className="px-1 pt-2 text-[10px] uppercase tracking-wide text-white/40">داخلی‌های مرکز تلفن</p>}
+      {extensions.map((person) => (
+        <button key={person.id || person.number} type="button" onClick={() => onCall(person.number)} className="flex items-center gap-3 rounded-2xl px-2 py-2 text-right hover:bg-white/5">
+          <span className="w-10 h-10 rounded-full bg-[#1c3a5f] text-white grid place-items-center text-sm font-semibold">{person.name.slice(0, 1)}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] text-white truncate">{person.name}</span>
+            <span className="block text-[11px] text-white/45">{fa(person.number)}</span>
+          </span>
+          <Phone size={16} className="text-[#0a84ff]" />
+        </button>
       ))}
     </div>
   )
 }
 
-function HistoryList({ items, onCall }: { items: HistoryItem[], onCall: (number: string) => void }) {
-  if (!items.length) return <p className="text-sm text-slate-500 text-center py-8">تاریخچه‌ای نیست.</p>
+function HistoryList({ items, onCall }: { items: PhoneCdr[], onCall: (number: string) => void }) {
+  if (!items.length) return <p className="text-center text-xs text-white/45 py-10">هنوز تماسی ثبت نشده است.</p>
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1 pt-1">
       {items.map((item) => (
-        <button key={item.id} type="button" onClick={() => onCall(item.number)} className="flex items-center gap-2 rounded-xl px-1 py-2 text-right hover:bg-white/40">
-          {item.direction === 'missed' ? <PhoneIncoming size={15} className="text-rose-500" /> : item.direction === 'in' ? <PhoneIncoming size={15} className="text-emerald-500" /> : <Phone size={15} className="text-sky-500" />}
+        <button key={item.id} type="button" onClick={() => onCall(item.number)} className="flex items-center gap-3 rounded-2xl px-2 py-2 text-right hover:bg-white/5">
+          {item.direction === 'in' ? <PhoneIncoming size={16} className={item.disposition === 'missed' ? 'text-[#ff453a]' : 'text-[#30d158]'} /> : <Phone size={16} className="text-[#0a84ff]" />}
           <span className="min-w-0 flex-1">
-            <span className={`block text-sm truncate ${item.direction === 'missed' ? 'text-rose-600' : 'text-slate-800'}`}>{item.name}</span>
-            <span className="block text-[11px] text-slate-400">{fa(item.number)} · {clock(item.seconds)}</span>
+            <span className={`block text-[15px] truncate ${item.disposition === 'missed' ? 'text-[#ff453a]' : 'text-white'}`}>{item.name}</span>
+            <span className="block text-[11px] text-white/45">{fa(item.number)} · {clock(item.seconds)}</span>
           </span>
         </button>
       ))}
@@ -423,166 +681,110 @@ function HistoryList({ items, onCall }: { items: HistoryItem[], onCall: (number:
   )
 }
 
-function Mailbox({ items, onToggle, onCall }: { items: Mail[], onToggle: (id: string) => void, onCall: (number: string) => void }) {
-  return (
-    <div className="flex flex-col gap-2">
-      {items.map((item) => (
-        <article key={item.id} className="rounded-xl border border-white/20 px-3 py-2 flex items-center gap-2">
-          <button type="button" aria-label="پخش پیام" onClick={() => onToggle(item.id)} className="w-8 h-8 rounded-full grid place-items-center text-white" style={{ background: item.heard ? 'rgba(148,163,184,0.7)' : 'linear-gradient(135deg,#e879f9,#6366f1)' }}>
-            <Play size={14} />
-          </button>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm text-slate-800 truncate">{item.name}</p>
-            <p className="text-[11px] text-slate-400">{fa(item.number)} · {clock(item.seconds)}{item.heard ? ' · شنیده شد' : ''}</p>
-          </div>
-          <button type="button" aria-label="تماس برگشتی" onClick={() => onCall(item.number)} className="text-slate-400"><Phone size={15} /></button>
-        </article>
-      ))}
-    </div>
-  )
-}
-
-function More({
-  queue, parks, ringtone, onRingtone, onPickup, onPark, onRetrieve,
+function SettingsPanel({
+  draft, saving, testing, registered, onChange, onSave, onTest,
 }: {
-  queue: { id: string, name: string, number: string }[]
-  parks: Parked[]
-  ringtone: boolean
-  onRingtone: (value: boolean) => void
-  onPickup: (item: { id: string, name: string, number: string }) => void
-  onPark: (index: number) => void
-  onRetrieve: (slot: string) => void
+  draft: PhoneSettings
+  saving: boolean
+  testing: boolean
+  registered: boolean
+  onChange: (value: PhoneSettings) => void
+  onSave: () => void
+  onTest: () => void
 }) {
+  function set<K extends keyof PhoneSettings>(key: K, value: PhoneSettings[K]) {
+    onChange({ ...draft, [key]: value })
+  }
   return (
-    <div className="flex flex-col gap-4 text-sm">
-      <div>
-        <p className="text-xs font-semibold text-slate-500 mb-2">صف انتظار</p>
-        {queue.length === 0 && <p className="text-xs text-slate-400">صف خالی است.</p>}
-        {queue.map((item) => (
-          <div key={item.id} className="flex items-center gap-2 py-1">
-            <div className="flex-1 min-w-0">
-              <p className="text-slate-800 truncate">{item.name}</p>
-              <p className="text-[11px] text-slate-400">{fa(item.number)}</p>
-            </div>
-            <button type="button" onClick={() => onPickup(item)} className="px-2 py-1 rounded-lg text-xs text-white" style={{ background: 'linear-gradient(135deg,#34d399,#059669)' }}>پاسخ</button>
-          </div>
-        ))}
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-slate-500 mb-2">پارک تماس</p>
-        <div className="grid grid-cols-5 gap-1">
-          {parks.map((item, index) => (
-            <button key={701 + index} type="button" onClick={() => item ? onRetrieve(item.slot) : onPark(index)} className="h-12 rounded-xl text-[11px] bg-white/40 text-slate-700">
-              {fa(701 + index)}
-              <span className="block text-[10px] text-slate-400">{item ? 'بردار' : 'پارک'}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-      <label className="flex items-center justify-between text-slate-700">
-        زنگ تماس
-        <input type="checkbox" checked={ringtone} onChange={(event) => onRingtone(event.target.checked)} />
+    <div className="flex flex-col gap-3 pt-1 pb-2 text-[13px] text-white">
+      <p className="text-[11px] text-white/55 leading-5">اتصال واقعی به نرم‌افزار CIWA Telecom. داخلی و رمز همان چیزی است که در مرکز تلفن تعریف کرده‌اید.</p>
+      <label className="iphone-field">نشانی API مرکز تلفن
+        <input value={draft.apiUrl} onChange={(event) => set('apiUrl', event.target.value)} className="iphone-input" placeholder="http://127.0.0.1:8788" />
       </label>
-      <p className="text-[11px] text-slate-400 leading-5">بی‌صدا، نگه‌داشتن، انتقال مستقیم و با مشاوره، کنفرانس، ضبط، صف و صندوق صوتی از همین پنجره در دسترس است.</p>
+      <label className="iphone-field">داخلی
+        <input value={draft.extension} onChange={(event) => set('extension', event.target.value)} className="iphone-input" placeholder="101" />
+      </label>
+      <label className="iphone-field">رمز داخلی
+        <input type="password" value={draft.secret} onChange={(event) => set('secret', event.target.value)} className="iphone-input" placeholder={draft.hasSecret ? '••••••••' : 'رمز'} autoComplete="off" />
+      </label>
+      <label className="iphone-field">نام نمایشی
+        <input value={draft.displayName} onChange={(event) => set('displayName', event.target.value)} className="iphone-input" />
+      </label>
+      <label className="iphone-field">میزبان SIP
+        <input value={draft.sipHost} onChange={(event) => set('sipHost', event.target.value)} className="iphone-input" placeholder="127.0.0.1" />
+      </label>
+      <label className="iphone-field">نشانی WebSocket
+        <input value={draft.wssUrl} onChange={(event) => set('wssUrl', event.target.value)} className="iphone-input" placeholder="wss://127.0.0.1:8089/ws" />
+      </label>
+      <label className="iphone-field">حالت تماس
+        <select value={draft.mode} onChange={(event) => set('mode', event.target.value as PhoneSettings['mode'])} className="iphone-input">
+          <option value="originate">زنگ به داخلی (AMI / Click-to-Call)</option>
+          <option value="webrtc">تماس داخل مرورگر (WebRTC)</option>
+        </select>
+      </label>
+      <p className="text-[11px] text-white/45">وضعیت ثبت: {registered ? 'فعال' : 'خاموش'}</p>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={onTest} disabled={testing} className="h-11 rounded-2xl bg-[#3a3a3c] text-white text-sm disabled:opacity-50">{testing ? '...' : 'آزمایش اتصال'}</button>
+        <button type="button" onClick={onSave} disabled={saving} className="h-11 rounded-2xl bg-[#0a84ff] text-white text-sm font-semibold disabled:opacity-50">{saving ? '...' : 'ذخیره'}</button>
+      </div>
     </div>
   )
 }
 
-function CallStage(props: {
+function CallStage({
+  call, elapsed, onMute, onHold, onHangup, onAnswer, onDecline, onDigits,
+}: {
   call: LiveCall
   elapsed: number
-  digits: string
-  keypadOpen: boolean
-  transferOpen: boolean
-  transferTo: string
-  conferenceOpen: boolean
-  conferenceTo: string
-  onDigits: (key: string) => void
-  onBackspace: () => void
-  onToggle: (key: 'muted' | 'recording' | 'video' | 'speaker') => void
+  onMute: () => void
   onHold: () => void
   onHangup: () => void
   onAnswer: () => void
   onDecline: () => void
-  onKeypad: () => void
-  onTransfer: () => void
-  onTransferTo: (value: string) => void
-  onBlindTransfer: () => void
-  onAttended: () => void
-  onConference: () => void
-  onConferenceTo: (value: string) => void
-  onAddConference: () => void
+  onDigits: (key: string) => void
 }) {
-  const { call } = props
-  const title = call.phase === 'dialing' ? 'در حال شماره‌گیری' : call.phase === 'ringing' ? 'تماس ورودی' : call.phase === 'held' ? 'در حالت انتظار' : 'در حال مکالمه'
+  const title = call.phase === 'dialing' ? 'در حال تماس...' : call.phase === 'ringing' ? 'تماس ورودی' : call.phase === 'held' ? 'نگه‌داشته شده' : 'تلفن همراه'
   return (
-    <div className="flex flex-col gap-3">
-      <div className="text-center py-2">
-        <p className="text-xs text-slate-400">{title}{call.recording ? ' · در حال ضبط' : ''}</p>
-        <p className="text-lg font-bold text-slate-800 mt-1">{call.name}</p>
-        <p className="text-sm text-slate-500">{fa(call.number)}</p>
-        <p className="text-sm font-semibold text-violet-600 mt-1">{call.connectedAt ? clock(props.elapsed) : '...'}</p>
-        {call.conference.length > 0 && <p className="text-[11px] text-slate-400 mt-1">کنفرانس: {call.conference.join('، ')}</p>}
+    <div className="flex h-full flex-col items-center justify-between py-4 text-white">
+      <div className="text-center pt-6">
+        <p className="text-[13px] text-white/55">{title}</p>
+        <p className="mt-3 text-[28px] font-semibold tracking-tight">{call.name}</p>
+        <p className="mt-1 text-[15px] text-white/55">{fa(call.number)}</p>
+        <p className="mt-4 text-[18px] tabular-nums text-white/80">{call.connectedAt ? clock(elapsed) : call.mode === 'originate' ? 'زنگ داخلی' : '...'}</p>
       </div>
       {call.phase === 'ringing' ? (
-        <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={props.onDecline} className="h-11 rounded-2xl bg-rose-600 text-white text-sm font-semibold flex items-center justify-center gap-1"><PhoneOff size={15} /> رد</button>
-          <button type="button" onClick={props.onAnswer} className="h-11 rounded-2xl text-white text-sm font-semibold flex items-center justify-center gap-1" style={{ background: 'linear-gradient(135deg,#34d399,#059669)' }}><Phone size={15} /> پاسخ</button>
+        <div className="grid w-full grid-cols-2 gap-8 px-8 pb-6">
+          <button type="button" onClick={onDecline} className="flex flex-col items-center gap-2 text-[12px] text-white/80">
+            <span className="w-16 h-16 rounded-full bg-[#ff3b30] grid place-items-center"><PhoneOff size={28} /></span>
+            رد
+          </button>
+          <button type="button" onClick={onAnswer} className="flex flex-col items-center gap-2 text-[12px] text-white/80">
+            <span className="w-16 h-16 rounded-full bg-[#30d158] grid place-items-center"><Phone size={28} fill="currentColor" /></span>
+            پاسخ
+          </button>
         </div>
       ) : (
-        <>
-          <div className="grid grid-cols-4 gap-2 justify-items-center">
-            <Mini label={call.muted ? 'وصل صدا' : 'بی‌صدا'} onClick={() => props.onToggle('muted')}>{call.muted ? <MicOff size={16} /> : <Mic size={16} />}</Mini>
-            <Mini label={call.phase === 'held' ? 'ادامه' : 'انتظار'} onClick={props.onHold}>{call.phase === 'held' ? <Play size={16} /> : <Pause size={16} />}</Mini>
-            <Mini label="انتقال" onClick={props.onTransfer}><PhoneForwarded size={16} /></Mini>
-            <Mini label="کنفرانس" onClick={props.onConference}><Users size={16} /></Mini>
-            <Mini label={call.recording ? 'توقف ضبط' : 'ضبط'} onClick={() => props.onToggle('recording')}>{call.recording ? <Square size={16} /> : <span className="w-3 h-3 rounded-full bg-rose-500 inline-block" />}</Mini>
-            <Mini label="صفحه کلید" onClick={props.onKeypad}><Grip size={16} /></Mini>
-            <Mini label="ویدیو" onClick={() => props.onToggle('video')}>{call.video ? <Video size={16} /> : <VideoOff size={16} />}</Mini>
-            <Mini label="بلندگو" onClick={() => props.onToggle('speaker')}>{call.speaker ? <Volume2 size={16} /> : <VolumeX size={16} />}</Mini>
+        <div className="w-full flex flex-col gap-6 pb-4">
+          <div className="grid grid-cols-3 gap-4 place-items-center px-6">
+            <RoundAction label={call.muted ? 'صدا باز' : 'بی‌صدا'} onClick={onMute}>{call.muted ? <MicOff size={20} /> : <Mic size={20} />}</RoundAction>
+            <RoundAction label="صفحه‌کلید" onClick={() => onDigits('1')}><Grip size={20} /></RoundAction>
+            <RoundAction label={call.phase === 'held' ? 'ادامه' : 'نگه داشتن'} onClick={onHold}>{call.phase === 'held' ? <Play size={20} /> : <Pause size={20} />}</RoundAction>
           </div>
-          {props.keypadOpen && (
-            <div className="grid grid-cols-3 gap-1">
-              {KEYS.map((key) => (
-                <button key={key} type="button" onClick={() => props.onDigits(key)} className="h-9 rounded-xl bg-white/40 text-slate-800">{fa(key)}</button>
-              ))}
-              <p className="col-span-2 text-center text-sm text-slate-600 self-center">{props.digits ? fa(props.digits) : 'DTMF'}</p>
-              <button type="button" aria-label="پاک کردن رقم" onClick={props.onBackspace} className="h-9 rounded-xl bg-white/40 text-slate-500"><Delete size={14} className="mx-auto" /></button>
-            </div>
-          )}
-          {props.transferOpen && (
-            <div className="flex flex-col gap-2">
-              <input value={props.transferTo} onChange={(event) => props.onTransferTo(event.target.value)} placeholder="داخلی مقصد" aria-label="داخلی مقصد" className="glass-input rounded-xl px-3 py-2 text-sm" />
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={props.onBlindTransfer} className="h-9 rounded-xl bg-white/50 text-xs text-slate-700">انتقال مستقیم</button>
-                <button type="button" onClick={props.onAttended} className="h-9 rounded-xl bg-white/50 text-xs text-slate-700">انتقال با مشاوره</button>
-              </div>
-            </div>
-          )}
-          {props.conferenceOpen && (
-            <div className="flex gap-2">
-              <input value={props.conferenceTo} onChange={(event) => props.onConferenceTo(event.target.value)} placeholder="داخلی مهمان" aria-label="داخلی مهمان" className="glass-input flex-1 rounded-xl px-3 py-2 text-sm" />
-              <button type="button" onClick={props.onAddConference} className="px-3 rounded-xl text-xs text-white" style={{ background: 'linear-gradient(135deg,#e879f9,#6366f1)' }}>افزودن</button>
-            </div>
-          )}
-          {call.phase !== 'dialing' && (
-            <button type="button" onClick={props.onHangup} className="h-11 rounded-2xl bg-rose-600 text-white text-sm font-semibold flex items-center justify-center gap-1">
-              <PhoneOff size={15} /> قطع
+          <div className="flex justify-center">
+            <button type="button" aria-label="قطع" onClick={onHangup} className="w-16 h-16 rounded-full bg-[#ff3b30] grid place-items-center text-white">
+              <PhoneOff size={28} />
             </button>
-          )}
-          {call.phase === 'dialing' && (
-            <button type="button" onClick={props.onHangup} className="h-11 rounded-2xl bg-rose-600 text-white text-sm font-semibold">لغو</button>
-          )}
-        </>
+          </div>
+        </div>
       )}
     </div>
   )
 }
 
-function Mini({ label, onClick, children }: { label: string, onClick: () => void, children: React.ReactNode }) {
+function RoundAction({ label, onClick, children }: { label: string, onClick: () => void, children: ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className="w-14 flex flex-col items-center gap-1 text-[10px] text-slate-500">
-      <span className="w-10 h-10 rounded-full grid place-items-center bg-white/50 text-slate-700">{children}</span>
+    <button type="button" onClick={onClick} className="flex flex-col items-center gap-2 text-[11px] text-white/70">
+      <span className="w-14 h-14 rounded-full bg-white/12 grid place-items-center text-white">{children}</span>
       {label}
     </button>
   )

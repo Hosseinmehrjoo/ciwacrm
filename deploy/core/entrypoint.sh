@@ -19,7 +19,7 @@ fi
 php /opt/ciwa/generate-oauth-keys.php
 php /opt/ciwa/seed-oauth-client.php
 
-for path in vendor cache custom upload config.php config_override.php .htaccess; do
+for path in vendor cache custom upload config.php config_override.php .htaccess Api/V8/OAuth2/private.key Api/V8/OAuth2/public.key; do
   if [ -e "$path" ]; then
     chown -R www-data:www-data "$path" || true
   fi

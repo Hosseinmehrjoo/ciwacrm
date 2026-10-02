@@ -4,6 +4,9 @@ import { createModuleRecord, deleteModuleRecord, listModule, updateModuleRecord,
 import { useSession } from '../auth/SessionProvider'
 import { moduleById, modulesInGroup, optionLabel, probabilityForStage, type FieldDef, type ModuleDef } from '../crm/modules'
 import { SectionHelp } from '../help/SectionHelp'
+import { OpportunityBoard } from './OpportunityBoard'
+import { ReportBuilder } from './ReportBuilder'
+import { emptyLine, LineEditor, loadLines, persistLines, RelateField, RelatedPanel, type LineDraft } from './RecordExtras'
 
 export function ModuleView({
   moduleId,
@@ -30,6 +33,7 @@ export function ModuleView({
   const [formRecord, setFormRecord] = useState<CrmRecord | null | undefined>(undefined)
   const [pendingDelete, setPendingDelete] = useState<CrmRecord | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [layout, setLayout] = useState<'list' | 'board'>('list')
 
   useEffect(() => {
     setQuery(externalQuery)
@@ -43,7 +47,7 @@ export function ModuleView({
       setLoading(true)
       setError('')
       const params = new URLSearchParams()
-      params.set('page[size]', '20')
+      params.set('page[size]', module.board && layout === 'board' ? '100' : '20')
       params.set('page[number]', String(page))
       params.set(`fields[${module.suite}]`, module.fields.map((field) => field.name).join(','))
       const term = query.trim()
@@ -74,7 +78,7 @@ export function ModuleView({
       active = false
       window.clearTimeout(handle)
     }
-  }, [module, page, query, revision, session.demo, session.logout])
+  }, [layout, module, page, query, revision, session.demo, session.logout])
 
   useEffect(() => {
     if (session.demo || openCreateToken === 0) return
@@ -142,6 +146,12 @@ export function ModuleView({
           <SectionHelp topic={module.id} />
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {module.board && (
+            <div className="flex rounded-2xl border border-slate-200 p-0.5">
+              <button type="button" className={`rounded-xl px-3 py-1.5 text-sm ${layout === 'list' ? 'bg-emerald-600 text-white' : 'text-slate-700'}`} onClick={() => { setLayout('list'); setPage(1) }}>فهرست</button>
+              <button type="button" className={`rounded-xl px-3 py-1.5 text-sm ${layout === 'board' ? 'bg-emerald-600 text-white' : 'text-slate-700'}`} onClick={() => { setLayout('board'); setPage(1) }}>برد فروش</button>
+            </div>
+          )}
           <label className="sr-only" htmlFor={`${module.id}-search`}>جستجو در {module.label}</label>
           <input
             id={`${module.id}-search`}
@@ -160,13 +170,23 @@ export function ModuleView({
         </div>
       </div>
 
+      {module.id === 'reports' && <ReportBuilder />}
+
       {loading && <p className="text-sm text-slate-600">در حال خواندن {module.label}...</p>}
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {!loading && !error && records.length === 0 && (
         <p className="text-sm text-slate-600">رکوردی در {module.label} پیدا نشد.</p>
       )}
 
-      {records.length > 0 && (
+      {module.board && layout === 'board' && !loading && records.length > 0 && (
+        <OpportunityBoard
+          records={records}
+          stageField={module.fields.find((field) => field.name === 'sales_stage')!}
+          onMoved={() => setRevision((current) => current + 1)}
+        />
+      )}
+
+      {records.length > 0 && layout === 'list' && (
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-right">
             <thead>
@@ -251,6 +271,24 @@ function RecordForm({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [savedId, setSavedId] = useState(record?.id || '')
+  const [lines, setLines] = useState<LineDraft[]>([])
+  const [removedLineIds, setRemovedLineIds] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!module.lines || !record?.id) return
+    let active = true
+    loadLines(record.id)
+      .then((loaded) => {
+        if (active) setLines(loaded)
+      })
+      .catch(() => {
+        if (active) setFormError('ردیف‌های قبلی خوانده نشد.')
+      })
+    return () => {
+      active = false
+    }
+  }, [module.lines, record?.id])
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -274,10 +312,19 @@ function RecordForm({
       const attributes = Object.fromEntries(
         module.fields
           .map((field) => [field.name, outgoing(field, draft[field.name] || '')] as const)
-          .filter(([, value]) => record || value !== ''),
+          .filter(([, value]) => record || savedId || value !== ''),
       )
-      if (record) await updateModuleRecord(module.suite, record.id, attributes)
-      else await createModuleRecord(module.suite, attributes)
+      let id = record?.id || savedId
+      if (id) await updateModuleRecord(module.suite, id, attributes)
+      else {
+        const created = await createModuleRecord(module.suite, attributes)
+        id = created.id
+        setSavedId(id)
+      }
+      if (module.lines && id) {
+        const totalField = module.id === 'contracts' ? 'total_contract_value' : 'total_amount'
+        await persistLines(module.suite, id, lines, removedLineIds, totalField)
+      }
       onSaved()
     } catch (caught) {
       setFormError(caught instanceof ApiError ? caught.message : 'ذخیره ناموفق بود.')
@@ -334,6 +381,13 @@ function RecordForm({
                   onChange={(event) => setDraft((current) => ({ ...current, [field.name]: event.target.value }))}
                   className="min-h-24 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-800 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
                 />
+              ) : field.kind === 'relate' ? (
+                <RelateField
+                  id={`field-${field.name}`}
+                  value={draft[field.name] || ''}
+                  invalid={Boolean(errors[field.name])}
+                  onChange={(value) => setDraft((current) => ({ ...current, [field.name]: value }))}
+                />
               ) : field.kind === 'select' ? (
                 <select
                   id={`field-${field.name}`}
@@ -368,6 +422,22 @@ function RecordForm({
               {errors[field.name] && <span className="text-xs text-red-700">{errors[field.name]}</span>}
             </label>
           ))}
+          {module.lines && (
+            <LineEditor
+              lines={lines}
+              onChange={(next) => {
+                const removed = lines.filter((line) => line.id && !next.some((item) => item.id === line.id)).map((line) => line.id!)
+                setRemovedLineIds((current) => [...current, ...removed])
+                setLines(next)
+              }}
+            />
+          )}
+          {module.id === 'contacts' && draft.email1?.includes('@') && (
+            <a className="sm:col-span-2 text-sm text-slate-700 underline" href={`mailto:${draft.email1}`}>ارسال ایمیل با برنامهٔ نامهٔ شما</a>
+          )}
+          {record && module.links && module.links.length > 0 && (
+            <RelatedPanel suite={module.suite} id={record.id} links={module.links} />
+          )}
         </div>
         <div className="flex items-center justify-end gap-2">
           <button type="button" className="px-4 py-2 rounded-2xl border border-slate-200 text-sm text-slate-700" onClick={onClose} disabled={saving}>انصراف</button>

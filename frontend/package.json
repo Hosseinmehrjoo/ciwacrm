@@ -10,6 +10,7 @@
     "format": "oxfmt"
   },
   "dependencies": {
+    "jssip": "^3.13.8",
     "lucide-react": "^1.47.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

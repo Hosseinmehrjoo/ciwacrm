@@ -11,7 +11,6 @@ type SessionValue = {
   user: CiwaUser | null
   login: (username: string, password: string) => Promise<void>
   logout: () => Promise<void>
-  enterDemo: () => void
 }
 
 const SessionContext = createContext<SessionValue | null>(null)
@@ -62,11 +61,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setUser(null)
       setDemo(false)
       setStatus('anonymous')
-    },
-    enterDemo() {
-      setDemo(true)
-      setUser({ id: 'demo', fullName: 'حسین مهرجو', userName: 'demo', isAdmin: true })
-      setStatus('authenticated')
     },
   }), [demo, offline, status, user])
 

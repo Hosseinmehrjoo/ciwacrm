@@ -1,6 +1,7 @@
 import http from 'node:http'
 import { handleAddonRequest } from './addons.mjs'
 import { handleAiRequest } from './ai.mjs'
+import { handlePhoneRequest } from './phone.mjs'
 import { hostUsage } from './host.mjs'
 
 const port = Number(process.env.PORT || 8787)
@@ -47,6 +48,17 @@ const server = http.createServer(async (req, res) => {
         access: readCookie(req, ACCESS_COOKIE),
         sendJson,
         crmFetch,
+      })
+      return
+    }
+    if (url.pathname.startsWith('/api/phone')) {
+      await handlePhoneRequest({
+        req,
+        res,
+        url,
+        authenticated: Boolean(readCookie(req, ACCESS_COOKIE)),
+        sendJson,
+        readRaw,
       })
       return
     }

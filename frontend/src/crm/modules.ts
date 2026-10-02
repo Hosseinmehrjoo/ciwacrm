@@ -1,4 +1,4 @@
-export type FieldKind = 'text' | 'textarea' | 'email' | 'tel' | 'number' | 'date' | 'datetime' | 'select'
+export type FieldKind = 'text' | 'textarea' | 'email' | 'tel' | 'number' | 'date' | 'datetime' | 'select' | 'relate'
 
 export type FieldDef = {
   name: string
@@ -8,6 +8,14 @@ export type FieldDef = {
   options?: { value: string; label: string }[]
   list?: boolean
   search?: boolean
+  relate?: { suite: string; label: string }
+}
+
+export type ModuleLink = {
+  link: string
+  label: string
+  suite: string
+  title: 'name' | 'person'
 }
 
 export type ModuleDef = {
@@ -17,6 +25,9 @@ export type ModuleDef = {
   singular: string
   group: string
   fields: FieldDef[]
+  links?: ModuleLink[]
+  board?: boolean
+  lines?: boolean
 }
 
 const stageProbability: Record<string, string> = {
@@ -167,6 +178,7 @@ export const modules: ModuleDef[] = [
       { name: 'phone_mobile', label: 'موبایل', kind: 'tel', list: true },
       { name: 'phone_work', label: 'تلفن', kind: 'tel' },
       { name: 'email1', label: 'ایمیل', kind: 'email', list: true },
+      { name: 'account_id', label: 'مشتری', kind: 'relate', relate: { suite: 'Accounts', label: 'name' } },
     ],
   },
   {
@@ -182,6 +194,14 @@ export const modules: ModuleDef[] = [
       { name: 'website', label: 'وب‌سایت', list: true },
       { name: 'billing_address_city', label: 'شهر' },
       { name: 'description', label: 'توضیح', kind: 'textarea' },
+    ],
+    links: [
+      { link: 'contacts', label: 'مخاطبین', suite: 'Contacts', title: 'person' },
+      { link: 'opportunities', label: 'فرصت‌های فروش', suite: 'Opportunities', title: 'name' },
+      { link: 'cases', label: 'تیکت‌ها', suite: 'Cases', title: 'name' },
+      { link: 'aos_quotes', label: 'پیش‌فاکتورها', suite: 'AOS_Quotes', title: 'name' },
+      { link: 'aos_invoices', label: 'فاکتورها', suite: 'AOS_Invoices', title: 'name' },
+      { link: 'aos_contracts', label: 'قراردادها', suite: 'AOS_Contracts', title: 'name' },
     ],
   },
   {
@@ -220,8 +240,10 @@ export const modules: ModuleDef[] = [
     label: 'فرصت‌های فروش',
     singular: 'فرصت فروش',
     group: 'sales',
+    board: true,
     fields: [
       { name: 'name', label: 'عنوان', required: true, list: true, search: true },
+      { name: 'account_id', label: 'مشتری', kind: 'relate', relate: { suite: 'Accounts', label: 'name' } },
       { name: 'amount', label: 'مبلغ', kind: 'number', required: true, list: true },
       { name: 'sales_stage', label: 'مرحله', kind: 'select', required: true, options: options(salesStages), list: true },
       { name: 'probability', label: 'احتمال (درصد)', kind: 'number', list: true },
@@ -236,8 +258,10 @@ export const modules: ModuleDef[] = [
     label: 'پیش‌فاکتورها',
     singular: 'پیش‌فاکتور',
     group: 'finance',
+    lines: true,
     fields: [
       { name: 'name', label: 'عنوان', required: true, list: true, search: true },
+      { name: 'billing_account_id', label: 'مشتری', kind: 'relate', relate: { suite: 'Accounts', label: 'name' } },
       { name: 'stage', label: 'مرحله', kind: 'select', options: options(quoteStage), list: true },
       { name: 'total_amount', label: 'مبلغ', kind: 'number', list: true },
       { name: 'expiration', label: 'اعتبار تا', kind: 'date' },
@@ -251,6 +275,7 @@ export const modules: ModuleDef[] = [
     group: 'support',
     fields: [
       { name: 'name', label: 'موضوع', required: true, list: true, search: true },
+      { name: 'account_id', label: 'مشتری', kind: 'relate', relate: { suite: 'Accounts', label: 'name' } },
       { name: 'status', label: 'وضعیت', kind: 'select', required: true, options: options(caseStatus), list: true },
       { name: 'priority', label: 'اولویت', kind: 'select', options: options(casePriority), list: true },
       { name: 'description', label: 'شرح', kind: 'textarea' },
@@ -331,8 +356,10 @@ export const modules: ModuleDef[] = [
     label: 'فاکتورها',
     singular: 'فاکتور',
     group: 'finance',
+    lines: true,
     fields: [
       { name: 'name', label: 'عنوان', required: true, list: true, search: true },
+      { name: 'billing_account_id', label: 'مشتری', kind: 'relate', relate: { suite: 'Accounts', label: 'name' } },
       { name: 'number', label: 'شماره', kind: 'number', list: true },
       { name: 'status', label: 'وضعیت', kind: 'select', options: options(invoiceStatus), list: true },
       { name: 'total_amount', label: 'مبلغ', kind: 'number', list: true },
@@ -345,8 +372,10 @@ export const modules: ModuleDef[] = [
     label: 'قراردادها',
     singular: 'قرارداد',
     group: 'finance',
+    lines: true,
     fields: [
       { name: 'name', label: 'عنوان', required: true, list: true, search: true },
+      { name: 'billing_account_id', label: 'مشتری', kind: 'relate', relate: { suite: 'Accounts', label: 'name' } },
       { name: 'status', label: 'وضعیت', kind: 'select', options: options(contractStatus), list: true },
       { name: 'total_contract_value', label: 'مبلغ', kind: 'number', list: true },
       { name: 'start_date', label: 'شروع', kind: 'date' },

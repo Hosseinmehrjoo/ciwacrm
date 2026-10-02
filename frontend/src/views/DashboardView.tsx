@@ -4,7 +4,7 @@ import {
 } from 'recharts'
 import {
   ArrowDownRight, ArrowUpRight, Building2, CheckCircle2, ChevronLeft, Circle, Clock,
-  DollarSign, Mail, Phone, Plus, Send, Star, Ticket, TrendingUp, Users,
+  DollarSign, Mail, Phone, Plus, Send, Ticket, TrendingUp, Users,
 } from 'lucide-react'
 import { ApiError } from '../api/client'
 import { listModule, updateModuleRecord, type CrmRecord } from '../api/records'
@@ -12,36 +12,6 @@ import { useSession } from '../auth/SessionProvider'
 import { hostUsage, type HostUsage } from '../api/host'
 import { groupLabel, moduleById, modules, optionLabel } from '../crm/modules'
 import { SectionHelp } from '../help/SectionHelp'
-
-const salesData = [
-  { date: '۱ شه', sales: 12000, opportunities: 8000, newCustomers: 3000 },
-  { date: '۵ شه', sales: 19000, opportunities: 10000, newCustomers: 5000 },
-  { date: '۱۰ شه', sales: 16000, opportunities: 11000, newCustomers: 4000 },
-  { date: '۱۵ شه', sales: 24000, opportunities: 15000, newCustomers: 7000 },
-  { date: '۲۰ شه', sales: 21000, opportunities: 13000, newCustomers: 6000 },
-  { date: '۲۵ شه', sales: 29000, opportunities: 18000, newCustomers: 9000 },
-  { date: '۳۰ شه', sales: 36500, opportunities: 22000, newCustomers: 12000 },
-]
-
-const sampleTasks = [
-  { title: 'تماس با مشتری جدید', done: true, priority: 'high' },
-  { title: 'ارسال پیشنهاد قیمت', done: false, priority: 'high' },
-  { title: 'پیگیری فاکتور شماره ۲۳۴۴', done: false, priority: 'medium' },
-  { title: 'بررسی تیکت پشتیبانی', done: false, priority: 'low' },
-]
-
-const sampleContacts = [
-  { name: 'سارا محمدی', company: 'شرکت نورینک', time: '۱۰ دقیقه پیش', initials: 'سم', color: '#e879f9' },
-  { name: 'محمد کاظمی', company: 'شرکت آریا', time: '۴۵ دقیقه پیش', initials: 'مک', color: '#3b82f6' },
-  { name: 'فاطمه حسینی', company: 'فروشگاه پارس', time: '۲ ساعت پیش', initials: 'فح', color: '#8b5cf6' },
-  { name: 'علی رضایی', company: 'گروه مهر', time: '۳ ساعت پیش', initials: 'عر', color: '#f59e0b' },
-]
-
-const sampleMeetings = [
-  { title: 'جلسه با مشتری VIP', time: '۱۰:۰۰', duration: '۶۰ دقیقه', color: '#a78bfa' },
-  { title: 'پیگیری وضعیت تیکت‌ها', time: '۱۳:۳۰', duration: '۳۰ دقیقه', color: '#3b82f6' },
-  { title: 'وبینار معرفی محصول', time: '۱۶:۰۰', duration: '۹۰ دقیقه', color: '#8b5cf6' },
-]
 
 const funnelStages = [
   { label: 'شناسایی', keys: ['Prospecting', 'Qualification'], color: '#e879f9' },
@@ -71,8 +41,8 @@ export function DashboardView({
   const [contacts, setContacts] = useState<CrmRecord[]>([])
   const [meetings, setMeetings] = useState<CrmRecord[]>([])
   const [activities, setActivities] = useState<string[]>([])
-  const [funnel, setFunnel] = useState<number[]>([48, 32, 18, 9])
-  const [sampleDone, setSampleDone] = useState(sampleTasks.map((task) => task.done))
+  const [funnel, setFunnel] = useState<number[]>([0, 0, 0, 0])
+  const [salesTrend, setSalesTrend] = useState<{ date: string, sales: number, opportunities: number, newCustomers: number }[]>([])
   const [host, setHost] = useState<HostUsage | null>(null)
   const now = useNow()
 
@@ -81,17 +51,18 @@ export function DashboardView({
     let active = true
     void (async () => {
       try {
-        const [opportunityPage, taskPage, contactPage, meetingPage, callPage] = await Promise.all([
-          listFields('Opportunities', 'name,sales_stage,amount', 100),
+        const [opportunityPage, taskPage, contactPage, meetingPage, callPage, accountPage] = await Promise.all([
+          listFields('Opportunities', 'name,sales_stage,amount,date_closed,date_entered', 100),
           listFields('Tasks', 'name,status,priority', 6),
           listFields('Contacts', 'first_name,last_name,title,department', 4),
           listFields('Meetings', 'name,status,date_start,location', 4),
           listFields('Calls', 'name,status,date_start', 4),
+          listFields('Accounts', 'name,date_entered', 100),
         ])
         if (!active) return
         const stages = opportunityPage.records.map((record) => record.attributes.sales_stage)
-        const nextFunnel = funnelStages.map((stage) => stages.filter((value) => stage.keys.includes(value)).length)
-        if (nextFunnel.some((count) => count > 0)) setFunnel(nextFunnel)
+        setFunnel(funnelStages.map((stage) => stages.filter((value) => stage.keys.includes(value)).length))
+        setSalesTrend(buildSalesTrend(opportunityPage.records, accountPage.records))
         setTasks(taskPage.records)
         setContacts(contactPage.records)
         setMeetings(meetingPage.records)
@@ -182,16 +153,20 @@ export function DashboardView({
             <span className="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-xl">۳۰ روز گذشته</span>
           </div>
           <div className="h-[200px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={salesData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--ciwa-chart)' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--ciwa-chart)' }} axisLine={false} tickLine={false} width={36} />
-                <Tooltip contentStyle={{ background: 'var(--ciwa-tooltip-bg)', border: '1px solid var(--ciwa-tooltip-border)', borderRadius: 16, color: 'var(--ciwa-text)' }} />
-                <Area type="monotone" dataKey="sales" name="فروش" stroke="#e879f9" fill="rgba(232,121,249,0.22)" strokeWidth={2} />
-                <Area type="monotone" dataKey="opportunities" name="فرصت‌ها" stroke="#a78bfa" fill="rgba(167,139,250,0.16)" strokeWidth={2} />
-                <Area type="monotone" dataKey="newCustomers" name="مشتری جدید" stroke="#60a5fa" fill="rgba(96,165,250,0.16)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
+            {salesTrend.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={salesTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--ciwa-chart)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: 'var(--ciwa-chart)' }} axisLine={false} tickLine={false} width={36} />
+                  <Tooltip contentStyle={{ background: 'var(--ciwa-tooltip-bg)', border: '1px solid var(--ciwa-tooltip-border)', borderRadius: 16, color: 'var(--ciwa-text)' }} />
+                  <Area type="monotone" dataKey="sales" name="فروش" stroke="#e879f9" fill="rgba(232,121,249,0.22)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="opportunities" name="فرصت‌ها" stroke="#a78bfa" fill="rgba(167,139,250,0.16)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="newCustomers" name="مشتری جدید" stroke="#60a5fa" fill="rgba(96,165,250,0.16)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <EmptyBlock text="هنوز فرصت فروش یا مشتری برای رسم نمودار ثبت نشده است." />
+            )}
           </div>
         </div>
 
@@ -200,24 +175,30 @@ export function DashboardView({
             <h3 className="text-sm font-semibold text-slate-800">قیف فروش</h3>
             <button type="button" className="text-xs text-emerald-700 font-medium" onClick={() => onOpen('opportunities')}>مشاهده همه</button>
           </div>
-          <div className="flex flex-col gap-3">
-            {funnelStages.map((stage, index) => (
-              <div key={stage.label}>
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="text-slate-700 font-medium">{stage.label}</span>
-                  <span className="text-slate-500">{funnel[index].toLocaleString('fa-IR')}</span>
-                </div>
-                <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${Math.max(8, (funnel[index] / funnelMax) * 100)}%`, background: stage.color }} />
-                </div>
+          {funnel.some((count) => count > 0) ? (
+            <>
+              <div className="flex flex-col gap-3">
+                {funnelStages.map((stage, index) => (
+                  <div key={stage.label}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-slate-700 font-medium">{stage.label}</span>
+                      <span className="text-slate-500">{funnel[index].toLocaleString('fa-IR')}</span>
+                    </div>
+                    <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${Math.max(8, (funnel[index] / funnelMax) * 100)}%`, background: stage.color }} />
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="mt-4 flex flex-col items-center gap-1">
-            {funnelStages.map((stage, index) => (
-              <div key={stage.label} className="h-5 rounded-md" style={{ width: `${100 - index * 18}%`, background: stage.color, opacity: 0.85 - index * 0.12 }} />
-            ))}
-          </div>
+              <div className="mt-4 flex flex-col items-center gap-1">
+                {funnelStages.map((stage, index) => (
+                  <div key={stage.label} className="h-5 rounded-md" style={{ width: `${100 - index * 18}%`, background: stage.color, opacity: 0.85 - index * 0.12 }} />
+                ))}
+              </div>
+            </>
+          ) : (
+            <EmptyBlock text="قیف وقتی فرصت فروش داشته باشید پر می‌شود." />
+          )}
         </div>
 
         <div className="glass-card rounded-2xl p-5">
@@ -226,12 +207,12 @@ export function DashboardView({
             <button type="button" className="text-xs text-emerald-700 font-medium" onClick={() => onOpen('calls')}>مشاهده همه</button>
           </div>
           <div className="flex flex-col gap-2">
-            {(activities.length > 0 ? activities : sampleTasks.map((task) => task.title)).map((title) => (
+            {activities.length > 0 ? activities.map((title) => (
               <div key={title} className="activity-item flex items-center gap-2 rounded-xl px-2 py-2">
                 <Phone size={14} className="text-emerald-600 shrink-0" />
                 <span className="text-xs text-slate-700 font-medium min-w-0 truncate">{title}</span>
               </div>
-            ))}
+            )) : <EmptyBlock text="هنوز تماسی یا فعالیتی ثبت نشده است." />}
           </div>
           <div className="mt-4 flex items-center gap-2 text-slate-400">
             <Phone size={12} />
@@ -247,7 +228,7 @@ export function DashboardView({
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-slate-800">وظایف امروز</h3>
             <button type="button" className="text-xs text-emerald-700 font-medium" onClick={() => onOpen('tasks')}>
-              {tasks.length > 0 ? `${tasks.filter((task) => task.attributes.status === 'Completed').length}/${tasks.length}` : `${sampleDone.filter(Boolean).length}/${sampleTasks.length}`}
+              {tasks.length > 0 ? `${tasks.filter((task) => task.attributes.status === 'Completed').length}/${tasks.length}` : '۰'}
             </button>
           </div>
           <div className="flex flex-col gap-2">
@@ -259,20 +240,7 @@ export function DashboardView({
                   <span className={`text-xs flex-1 ${done ? 'text-slate-400 line-through' : 'text-slate-700 font-medium'}`}>{task.attributes.name}</span>
                 </button>
               )
-            }) : sampleTasks.map((task, index) => (
-              <button
-                key={task.title}
-                type="button"
-                className={`flex items-center gap-2 rounded-xl border px-2 py-2 text-right ${sampleDone[index] ? 'border-violet-300 bg-violet-500/10' : 'border-slate-200'}`}
-                onClick={() => setSampleDone((current) => current.map((done, item) => item === index ? !done : done))}
-              >
-                {sampleDone[index] ? <CheckCircle2 size={16} className="text-emerald-600 shrink-0" /> : <Circle size={16} className="text-slate-300 shrink-0" />}
-                <span className={`text-xs flex-1 ${sampleDone[index] ? 'text-slate-400 line-through' : 'text-slate-700 font-medium'}`}>{task.title}</span>
-                <span className={`text-xs px-1.5 py-0.5 rounded-lg ${task.priority === 'high' ? 'bg-red-50 text-red-700' : task.priority === 'medium' ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
-                  {task.priority === 'high' ? 'بالا' : task.priority === 'medium' ? 'متوسط' : 'پایین'}
-                </span>
-              </button>
-            ))}
+            }) : <EmptyBlock text="وظیفه‌ای برای امروز نیست." />}
           </div>
         </div>
 
@@ -295,21 +263,7 @@ export function DashboardView({
                   </div>
                 </button>
               )
-            }) : sampleContacts.map((contact) => (
-              <div key={contact.name} className="flex items-center gap-3 p-2.5 rounded-xl">
-                <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0" style={{ background: `linear-gradient(135deg, ${contact.color}, ${contact.color}aa)` }}>
-                  {contact.initials}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-slate-700">{contact.name}</p>
-                  <p className="text-xs text-slate-500">{contact.company}</p>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span className="text-xs text-slate-500">{contact.time}</span>
-                  <Star size={12} className="text-slate-300" />
-                </div>
-              </div>
-            ))}
+            }) : <EmptyBlock text="هنوز مخاطبی ثبت نشده است." />}
           </div>
         </div>
 
@@ -332,21 +286,56 @@ export function DashboardView({
                 </div>
                 <ChevronLeft size={14} className="text-slate-300" />
               </button>
-            )) : sampleMeetings.map((meeting) => (
-              <div key={meeting.title} className="flex items-center gap-3 p-2.5 rounded-xl" style={{ background: `${meeting.color}08`, border: `1px solid ${meeting.color}20` }}>
-                <div className="w-1 h-10 rounded-full shrink-0" style={{ background: meeting.color }} />
-                <div className="flex-1">
-                  <p className="text-xs font-semibold text-slate-700">{meeting.title}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{meeting.time} • {meeting.duration}</p>
-                </div>
-                <ChevronLeft size={14} className="text-slate-300" />
-              </div>
-            ))}
+            )) : <EmptyBlock text="قراری برای نمایش نیست." />}
           </div>
         </div>
       </div>
     </div>
   )
+}
+
+function EmptyBlock({ text }: { text: string }) {
+  return <p className="text-xs text-slate-500 leading-6 py-6 text-center">{text}</p>
+}
+
+function buildSalesTrend(opportunities: CrmRecord[], accounts: CrmRecord[]) {
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date()
+    date.setHours(12, 0, 0, 0)
+    date.setDate(date.getDate() - (6 - index))
+    return date
+  })
+  const buckets = days.map((date) => ({
+    key: date.toISOString().slice(0, 10),
+    date: new Intl.DateTimeFormat('fa-IR', { day: 'numeric', month: 'short', timeZone: 'Asia/Tehran' }).format(date),
+    sales: 0,
+    opportunities: 0,
+    newCustomers: 0,
+  }))
+  const indexByDay = new Map(buckets.map((item, index) => [item.key, index]))
+
+  for (const record of opportunities) {
+    const raw = record.attributes.date_closed || record.attributes.date_entered
+    const day = parseCrmDay(raw)
+    if (!day || !indexByDay.has(day)) continue
+    const index = indexByDay.get(day)!
+    buckets[index].opportunities += 1
+    buckets[index].sales += Number(record.attributes.amount) || 0
+  }
+  for (const record of accounts) {
+    const day = parseCrmDay(record.attributes.date_entered)
+    if (!day || !indexByDay.has(day)) continue
+    buckets[indexByDay.get(day)!].newCustomers += 1
+  }
+
+  return buckets.some((item) => item.sales || item.opportunities || item.newCustomers) ? buckets : []
+}
+
+function parseCrmDay(value: string | undefined) {
+  if (!value) return ''
+  const stamp = Date.parse(value.includes('T') ? value : value.replace(' ', 'T'))
+  if (Number.isNaN(stamp)) return ''
+  return new Date(stamp).toISOString().slice(0, 10)
 }
 
 function UsageMeter({ label, percent, detail }: { label: string; percent: number | null; detail: string }) {
@@ -420,7 +409,7 @@ function KpiCard({
   onOpen: () => void
 }) {
   const Icon = kpi.icon
-  const spark = Array.from({ length: 8 }, (_, index) => ({ v: 8 + index * (kpi.up ? 1.4 : -0.6) }))
+  const spark = Array.from({ length: 8 }, (_, index) => ({ v: value ? Math.max(2, (value % 7) + index) : 2 }))
   return (
     <button type="button" onClick={onOpen} className="glass-card kpi-card rounded-2xl p-4 flex flex-col gap-3 text-right min-w-0">
       <div className="flex items-center justify-between">

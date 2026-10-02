@@ -9,8 +9,8 @@ const dataDir = path.join(root, 'data')
 const stateFile = path.join(dataDir, 'addons.json')
 const uploadDir = path.join(dataDir, 'uploaded-addons')
 
-const ICONS = new Set(['sparkles', 'award', 'clipboard', 'puzzle', 'package', 'star', 'phone'])
-const WIDGETS = new Set(['softphone'])
+const ICONS = new Set(['sparkles', 'award', 'clipboard', 'puzzle', 'package', 'star', 'phone', 'receipt'])
+const WIDGETS = new Set(['softphone', 'invoice-builder'])
 const FIELD_NAME = /^[a-z][a-z0-9_]{0,30}$/
 const ADDON_ID = /^[a-z][a-z0-9-]{1,40}$/
 

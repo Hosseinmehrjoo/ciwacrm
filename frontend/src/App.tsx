@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useSession, SessionProvider } from './auth/SessionProvider'
 import { LoginScreen } from './views/LoginScreen'
 import { ModuleView } from './views/ModuleView'
@@ -6,17 +7,18 @@ import { DashboardView, SettingsView } from './views/DashboardView'
 import { AiView } from './views/AiView'
 import { groupLabel, groupOrder, moduleById, modules } from './crm/modules'
 import { useTheme } from './theme/useTheme'
-import { addonIcon } from './addons/icons'
 import { useAddons } from './addons/useAddons'
 import { AddonScreen, AddonsView } from './views/AddonsView'
 import { Softphone } from './widgets/Softphone'
 import { SupportView } from './views/SupportView'
+import { CalendarView } from './views/CalendarView'
+import { InvoiceBuilder } from './views/InvoiceBuilder'
 import { BusyIndicator, LoadingMark } from './ui/LoadingMark'
 import {
   LayoutDashboard, Users, TrendingUp, Ticket, Megaphone,
   CheckSquare, Calendar, BarChart2,
   DollarSign, Brain, Settings, Bell, Search, Sun, Moon, Menu, X, Puzzle, LifeBuoy,
-  Zap, ChevronDown, Plus,
+  Zap, ChevronDown, ChevronLeft, Plus,
 } from 'lucide-react'
 
 const groupIcons = {
@@ -47,34 +49,174 @@ const quickActions = [
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 
-function QuickMenu({ open, onToggle, onPick }: { open: boolean; onToggle: () => void; onPick: (id: string) => void }) {
+function QuickActions({ onPick }: { onPick: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onPointer(event: PointerEvent) {
+      if (!root.current?.contains(event.target as Node)) setOpen(false)
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointer)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onPointer)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
   return (
-    <div className="mb-1">
+    <div ref={root} className="relative shrink-0">
       <button
         type="button"
-        className={`sidebar-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-right ${open ? 'active' : 'text-slate-500'}`}
+        className={`quick-trigger flex h-10 items-center gap-1.5 rounded-2xl px-3 text-xs font-semibold ${open ? 'active' : ''}`}
         aria-expanded={open}
         aria-controls="quick-actions"
-        onClick={onToggle}
+        onClick={() => setOpen((current) => !current)}
       >
-        <Zap size={17} className="shrink-0" />
-        <span className="flex-1">عملکرد سریع</span>
-        <ChevronDown size={15} className={`shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        <Zap size={15} className="shrink-0" />
+        <span>عملکرد سریع</span>
+        <ChevronDown size={14} className={`shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div id="quick-actions" className="quick-menu mt-1 rounded-2xl p-1.5 flex flex-col gap-0.5">
+        <div id="quick-actions" className="quick-menu absolute right-0 z-30 mt-2 w-52 rounded-2xl p-1.5 flex flex-col gap-0.5" role="menu">
           {quickActions.map((action) => (
             <button
               key={action.id}
               type="button"
+              role="menuitem"
               className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-right text-xs font-medium text-slate-600 hover:bg-white/10"
-              onClick={() => onPick(action.id)}
+              onClick={() => {
+                setOpen(false)
+                onPick(action.id)
+              }}
             >
               <Plus size={13} className="shrink-0" />
               <span>{action.label}</span>
             </button>
           ))}
         </div>
+      )}
+    </div>
+  )
+}
+
+function SubmenuList({ items }: { items: { id: string; label: string; active: boolean; onSelect: () => void }[] }) {
+  return (
+    <div className="flex flex-col gap-0.5" role="group">
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className={`sidebar-item w-full rounded-xl px-3 py-2 text-right text-xs font-medium ${item.active ? 'active' : 'text-slate-500'}`}
+          aria-current={item.active ? 'page' : undefined}
+          onClick={item.onSelect}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function NavGroup({
+  id,
+  label,
+  icon: Icon,
+  items,
+  locked,
+  hovered,
+  opened,
+  canHover,
+  onToggle,
+  onHoverChange,
+}: {
+  id: string
+  label: string
+  icon: typeof Users
+  items: { id: string; label: string; active: boolean; onSelect: () => void }[]
+  locked: boolean
+  hovered: boolean
+  opened: boolean
+  canHover: boolean
+  onToggle: () => void
+  onHoverChange: (id: string | null) => void
+}) {
+  const row = useRef<HTMLButtonElement>(null)
+  const [box, setBox] = useState<{ top: number; left: number; maxHeight: number } | null>(null)
+  const showInline = locked || opened || (!canHover && hovered)
+  const showFlyout = canHover && hovered && !showInline
+
+  function place() {
+    const anchor = row.current
+    if (!anchor) return
+    const rect = anchor.getBoundingClientRect()
+    const width = 224
+    const margin = 8
+    const maxHeight = Math.min(384, window.innerHeight - margin * 2)
+    let left = rect.left - width + 10
+    if (left < margin) left = margin
+    let top = rect.top
+    if (top + 160 > window.innerHeight - margin) top = Math.max(margin, window.innerHeight - margin - Math.min(maxHeight, 220))
+    setBox({ top, left, maxHeight })
+  }
+
+  useEffect(() => {
+    if (!showFlyout) return
+    place()
+    const nav = row.current?.closest('nav')
+    const onMove = () => place()
+    nav?.addEventListener('scroll', onMove, { passive: true })
+    window.addEventListener('resize', onMove)
+    return () => {
+      nav?.removeEventListener('scroll', onMove)
+      window.removeEventListener('resize', onMove)
+    }
+  }, [showFlyout])
+
+  return (
+    <div
+      className="nav-group"
+      onMouseEnter={() => {
+        if (canHover) onHoverChange(id)
+      }}
+      onMouseLeave={() => {
+        if (canHover) onHoverChange(null)
+      }}
+    >
+      <button
+        ref={row}
+        type="button"
+        className={`sidebar-item nav-parent w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-right ${locked ? 'active' : 'text-slate-500'}`}
+        aria-expanded={showInline || showFlyout}
+        aria-controls={`nav-${id}`}
+        onClick={onToggle}
+      >
+        <Icon size={17} className="shrink-0" />
+        <span className="flex-1">{label}</span>
+        <ChevronLeft size={14} className={`shrink-0 transition-transform duration-200 ${showInline ? '-rotate-90' : ''}`} />
+      </button>
+      {showInline && (
+        <div id={`nav-${id}`} className="nav-sub quick-menu mt-1">
+          <SubmenuList items={items} />
+        </div>
+      )}
+      {showFlyout && box && createPortal(
+        <div
+          id={showInline ? undefined : `nav-${id}`}
+          className="vision-app nav-flyout quick-menu"
+          style={{ top: box.top, left: box.left, maxHeight: box.maxHeight }}
+          onMouseEnter={() => onHoverChange(id)}
+          onMouseLeave={() => onHoverChange(null)}
+        >
+          <p className="nav-flyout-title">{label}</p>
+          <SubmenuList items={items} />
+        </div>,
+        document.querySelector('.vision-app') ?? document.body,
       )}
     </div>
   )
@@ -106,13 +248,17 @@ function CrmShell() {
   const addons = useAddons(session.status === 'authenticated')
   const [section, setSection] = useState('dashboard')
   const [createRequest, setCreateRequest] = useState<{ id: string; token: number } | null>(null)
-  const [quickOpen, setQuickOpen] = useState(false)
+  const [lockedGroup, setLockedGroup] = useState<string | null>(null)
+  const [hoverGroup, setHoverGroup] = useState<string | null>(null)
+  const [menuGroup, setMenuGroup] = useState<string | null>(null)
   const [headerQuery, setHeaderQuery] = useState('')
   const [phoneOpen, setPhoneOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
   const [compactNav, setCompactNav] = useState(() => window.matchMedia('(max-width: 1023px)').matches)
   const phoneSeen = useRef<boolean | null>(null)
+  const hoverTimer = useRef<number | null>(null)
   const phoneAddon = addons.addons.find((addon) => addon.installed && addon.widget === 'softphone')
+  const [canHover, setCanHover] = useState(() => window.matchMedia('(hover: hover) and (pointer: fine)').matches)
 
   useEffect(() => {
     if (!addons.ready) return
@@ -126,11 +272,28 @@ function CrmShell() {
     phoneSeen.current = installed
   }, [addons.ready, phoneAddon])
 
+  function rememberGroup(id: string) {
+    const mod = moduleById(id)
+    if (mod) setLockedGroup(mod.group)
+    else if (id === 'calendar') setLockedGroup('activity')
+    else if (id === 'addon-store' || id.startsWith('addon:')) setLockedGroup('addons')
+    else setLockedGroup(null)
+    setMenuGroup(null)
+    setHoverGroup(null)
+  }
+
+  function pointMenu(id: string | null) {
+    if (hoverTimer.current != null) window.clearTimeout(hoverTimer.current)
+    hoverTimer.current = null
+    if (id) setHoverGroup(id)
+    else hoverTimer.current = window.setTimeout(() => setHoverGroup(null), 140)
+  }
+
   function openSection(id: string) {
     setHeaderQuery('')
     setSection(id)
     setNavOpen(false)
-    setQuickOpen(false)
+    rememberGroup(id)
   }
 
   function quickCreate(id: string) {
@@ -138,7 +301,7 @@ function CrmShell() {
     setCreateRequest({ id, token: Date.now() })
     setSection(id)
     setNavOpen(false)
-    setQuickOpen(false)
+    rememberGroup(id)
   }
 
   function openAddon(target: string) {
@@ -146,6 +309,9 @@ function CrmShell() {
     const addon = addons.addons.find((item) => item.id === id)
     setNavOpen(false)
     if (addon?.widget === 'softphone') {
+      setLockedGroup('addons')
+      setMenuGroup(null)
+      setHoverGroup(null)
       setPhoneOpen(true)
       return
     }
@@ -163,13 +329,14 @@ function CrmShell() {
   }, [])
 
   useEffect(() => {
-    if (!quickOpen) return
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setQuickOpen(false)
+    const media = window.matchMedia('(hover: hover) and (pointer: fine)')
+    const sync = () => setCanHover(media.matches)
+    media.addEventListener('change', sync)
+    return () => {
+      media.removeEventListener('change', sync)
+      if (hoverTimer.current != null) window.clearTimeout(hoverTimer.current)
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [quickOpen])
+  }, [])
 
   useEffect(() => {
     if (!navOpen) return
@@ -200,6 +367,20 @@ function CrmShell() {
   const displayName = session.user?.fullName || 'کاربر'
   const roleLabel = session.demo ? 'نمای نمونه' : session.user?.isAdmin ? 'مدیر سیستم' : 'کاربر'
   const initials = displayName.replace(/\s+/g, '').slice(0, 2)
+  const addonItems = [
+    ...addons.addons.filter((addon) => addon.installed).map((addon) => ({
+      id: addon.id,
+      label: addon.navLabel,
+      active: addon.widget === 'softphone' ? phoneOpen : section === `addon:${addon.id}`,
+      onSelect: () => openAddon(`addon:${addon.id}`),
+    })),
+    {
+      id: 'addon-store',
+      label: 'نصب ماژول جدید',
+      active: section === 'addon-store',
+      onSelect: () => openSection('addon-store'),
+    },
+  ]
 
   return (
     <div className="vision-app flex min-h-screen" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>
@@ -237,49 +418,48 @@ function CrmShell() {
           </button>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 p-3 flex flex-col gap-0.5 overflow-y-auto">
           <SidebarItem icon={LayoutDashboard} label="داشبورد" active={section === 'dashboard'} onClick={() => openSection('dashboard')} />
-          <QuickMenu open={quickOpen} onToggle={() => setQuickOpen((current) => !current)} onPick={quickCreate} />
           {groupOrder.map((group) => (
-            <div key={group}>
-              <div className="my-3 px-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-px bg-white/15" />
-                  <span className="text-xs text-slate-400 font-medium whitespace-nowrap">{groupLabel[group]}</span>
-                  <div className="flex-1 h-px bg-white/15" />
-                </div>
-              </div>
-              {modules.filter((item) => item.group === group).map((item) => (
-                <SidebarItem
-                  key={item.id}
-                  icon={groupIcons[group]}
-                  label={item.label}
-                  active={section === item.id}
-                  onClick={() => openSection(item.id)}
-                />
-              ))}
-            </div>
-          ))}
-
-          <div className="my-3 px-3">
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-px bg-white/15" />
-              <span className="text-xs text-slate-400 font-medium whitespace-nowrap">ماژول‌ها</span>
-              <div className="flex-1 h-px bg-white/15" />
-            </div>
-          </div>
-
-          {addons.addons.filter((addon) => addon.installed).map((addon) => (
-            <SidebarItem
-              key={addon.id}
-              icon={addonIcon(addon.icon)}
-              label={addon.navLabel}
-              active={addon.widget === 'softphone' ? phoneOpen : section === `addon:${addon.id}`}
-              onClick={() => openAddon(`addon:${addon.id}`)}
+            <NavGroup
+              key={group}
+              id={group}
+              label={groupLabel[group]}
+              icon={groupIcons[group]}
+              locked={lockedGroup === group}
+              hovered={hoverGroup === group}
+              opened={menuGroup === group}
+              canHover={canHover}
+              onToggle={() => setMenuGroup((current) => current === group ? null : group)}
+              onHoverChange={pointMenu}
+              items={[
+                ...(group === 'activity' ? [{
+                  id: 'calendar',
+                  label: 'تقویم',
+                  active: section === 'calendar',
+                  onSelect: () => openSection('calendar'),
+                }] : []),
+                ...modules.filter((item) => item.group === group).map((item) => ({
+                  id: item.id,
+                  label: item.label,
+                  active: section === item.id,
+                  onSelect: () => openSection(item.id),
+                })),
+              ]}
             />
           ))}
-          <SidebarItem icon={Puzzle} label="نصب ماژول جدید" active={section === 'addon-store'} onClick={() => openSection('addon-store')} />
+          <NavGroup
+            id="addons"
+            label="ماژول‌ها"
+            icon={Puzzle}
+            items={addonItems}
+            locked={lockedGroup === 'addons'}
+            hovered={hoverGroup === 'addons'}
+            opened={menuGroup === 'addons'}
+            canHover={canHover}
+            onToggle={() => setMenuGroup((current) => current === 'addons' ? null : 'addons')}
+            onHoverChange={pointMenu}
+          />
           <SidebarItem icon={Brain} label="هوش مصنوعی" active={section === 'ai'} onClick={() => openSection('ai')} />
           <SidebarItem icon={Settings} label="تنظیمات" active={section === 'settings'} onClick={() => openSection('settings')} />
         </nav>
@@ -349,15 +529,18 @@ function CrmShell() {
             </div>
           </div>
 
-          {/* Search */}
-          <div className="w-full lg:flex-1 lg:max-w-md">
-            <div className="relative">
+          <div className="flex w-full items-center gap-2 lg:max-w-xl lg:flex-1">
+            <QuickActions onPick={quickCreate} />
+            <div className="relative min-w-0 flex-1">
               <input
                 type="text"
                 value={headerQuery}
                 onChange={(event) => {
                   setHeaderQuery(event.target.value)
-                  if (!moduleById(section)) setSection('contacts')
+                  if (!moduleById(section)) {
+                    setSection('contacts')
+                    setLockedGroup('people')
+                  }
                 }}
                 placeholder="جستجو در بخش فعلی..."
                 aria-label="جستجو"
@@ -375,6 +558,7 @@ function CrmShell() {
               هسته در دسترس نیست. این نما داده نمونه است و ذخیره نمی‌شود.
             </p>
           )}
+          {section === 'calendar' && <CalendarView onOpen={openSection} />}
           {section === 'dashboard' && (
             <DashboardView
               onOpen={openSection}
@@ -392,6 +576,9 @@ function CrmShell() {
               actions={addons}
               onOpen={openAddon}
             />
+          )}
+          {section.startsWith('addon:') && addons.addons.some((addon) => addon.installed && addon.widget === 'invoice-builder' && `addon:${addon.id}` === section) && (
+            <InvoiceBuilder />
           )}
           {section.startsWith('addon:') && addons.addons.some((addon) => addon.installed && !addon.widget && `addon:${addon.id}` === section) && (
             <AddonScreen addon={addons.addons.find((addon) => `addon:${addon.id}` === section)!} />

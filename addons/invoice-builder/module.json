@@ -1,0 +1,11 @@
+{
+  "id": "invoice-builder",
+  "name": "فاکتورساز پیشرفته",
+  "version": "1.0.0",
+  "description": "پیش‌فاکتور و فاکتور را با مشتری، ردیف کالا، تخفیف، مالیات و پیش‌نمایش قابل چاپ بسازید.",
+  "navLabel": "فاکتورساز",
+  "icon": "receipt",
+  "widget": "invoice-builder",
+  "recordLabel": "سند",
+  "fields": []
+}

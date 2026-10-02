@@ -33,7 +33,7 @@ export function LoginScreen() {
 
         {session.offline && (
           <p className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 leading-6">
-            سرویس اتصال در دسترس نیست. تا وقتی هسته بالا نیامده، می‌توانید نمای نمونه را ببینید.
+            سرویس اتصال در دسترس نیست. هسته یا سرویس یکپارچه‌سازی را بررسی کنید و دوباره وارد شوید.
           </p>
         )}
 
@@ -69,12 +69,6 @@ export function LoginScreen() {
         <button type="submit" className="btn-primary rounded-2xl py-3 text-sm font-semibold disabled:opacity-60" disabled={pending}>
           {pending ? 'در حال ورود...' : 'ورود'}
         </button>
-
-        {session.offline && (
-          <button type="button" onClick={session.enterDemo} className="text-sm font-medium text-violet-700">
-            مشاهده نمای نمونه
-          </button>
-        )}
       </form>
     </main>
   )

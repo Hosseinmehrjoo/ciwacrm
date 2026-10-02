@@ -18,9 +18,9 @@ type RecordDocument = {
 
 const MODULE_NAME = /^[A-Za-z][A-Za-z0-9_]*$/
 
-export async function listContacts(options: { page: number; query: string }) {
+export async function listContacts(options: { page: number; query: string; size?: number }) {
   const params = new URLSearchParams()
-  params.set('page[size]', '20')
+  params.set('page[size]', String(options.size || 20))
   params.set('page[number]', String(options.page))
   params.set('fields[Contacts]', 'first_name,last_name,phone_mobile,phone_work,email1,title,department')
   const query = options.query.trim()
@@ -28,12 +28,14 @@ export async function listContacts(options: { page: number; query: string }) {
     params.set('filter[operator]', 'or')
     params.set('filter[first_name][like]', `%${query}%`)
     params.set('filter[last_name][like]', `%${query}%`)
+    params.set('filter[phone_mobile][like]', `%${query}%`)
+    params.set('filter[phone_work][like]', `%${query}%`)
   }
   return listModule('Contacts', params)
 }
 
-export async function listModule(module: string, params: URLSearchParams) {
-  const document = await api<ListDocument>(`/api/crm/V8/module/${modulePath(module)}?${params.toString()}`)
+export async function listModule(module: string, params: URLSearchParams, quiet = false) {
+  const document = await api<ListDocument>(`/api/crm/V8/module/${modulePath(module)}?${params.toString()}`, { quiet })
   return {
     records: (document.data ?? []).map(toRecord),
     totalPages: document.meta?.['total-pages'] ?? 1,
@@ -64,6 +66,21 @@ export async function deleteModuleRecord(module: string, id: string) {
   await api(`/api/crm/V8/module/${modulePath(module)}/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
+}
+
+export async function getModuleRecord(module: string, id: string, quiet = false) {
+  const document = await api<RecordDocument>(`/api/crm/V8/module/${modulePath(module)}/${encodeURIComponent(id)}`, { quiet })
+  return toRecord(document.data ?? {})
+}
+
+export async function listRelated(module: string, id: string, link: string) {
+  const params = new URLSearchParams()
+  params.set('page[size]', '20')
+  const document = await api<ListDocument>(
+    `/api/crm/V8/module/${modulePath(module)}/${encodeURIComponent(id)}/relationships/${encodeURIComponent(link)}?${params.toString()}`,
+    { quiet: true },
+  )
+  return (document.data ?? []).map(toRecord)
 }
 
 function modulePath(module: string) {
