@@ -1,0 +1,10 @@
+docker compose up -d db crm
+
+
+set -a
+source .env
+set +a
+node integration/server.mjs
+
+pnpm install
+pnpm dev

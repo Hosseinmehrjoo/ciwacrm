@@ -1,0 +1,35 @@
+@import url(star-rating.min.css);
+
+:root {
+    --gl-star-empty: url(../../imgs/star-empty.svg);
+    --gl-star-full: url(../../imgs/star-full.svg)
+}
+
+.gl-star-rating--stars[class*=" s"] > span {
+    background-size: auto
+}
+
+[data-star-rating] .gl-star-rating--stars > span {
+    width: 40px
+}
+
+@media (min-width:320px){
+    :root {
+        --gl-star-size: 30px;
+    }
+    
+    [data-star-rating] .gl-star-rating--stars > span {
+        width: 50px
+    }
+}
+
+@media (min-width:1281px){
+    :root {
+        --gl-star-size: 24px;
+    }
+
+    [data-star-rating] .gl-star-rating--stars > span {
+        width: 30px
+    }
+}
+

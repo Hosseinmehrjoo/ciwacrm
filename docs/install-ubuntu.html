@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>نصب CIWA CRM روی اوبونتو | راهنمای استقرار محلی</title>
+  <meta name="description" content="راهنمای کامل نصب CIWA CRM روی سرور اوبونتو برای اتصال کارمندان از شبکه داخلی." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #05060c;
+      --bg-elev: rgba(18, 20, 34, 0.72);
+      --line: rgba(255, 255, 255, 0.1);
+      --text: #f5f7fb;
+      --muted: #a8b0c5;
+      --fuchsia: #e879f9;
+      --violet: #a78bfa;
+      --blue: #60a5fa;
+      --ok: #34d399;
+      --warn: #fbbf24;
+      --radius: 22px;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+      --max: 1120px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Vazirmatn", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 480px at 90% -10%, rgba(232, 121, 249, 0.22), transparent 55%),
+        radial-gradient(700px 420px at -10% 20%, rgba(96, 165, 250, 0.18), transparent 50%),
+        radial-gradient(600px 400px at 70% 90%, rgba(167, 139, 250, 0.12), transparent 45%),
+        var(--bg);
+      line-height: 1.85;
+    }
+
+    a { color: #c4b5fd; text-decoration: none; }
+    a:hover { color: #f5d0fe; }
+
+    .shell { width: min(var(--max), calc(100% - 2rem)); margin: 0 auto; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      backdrop-filter: blur(16px);
+      background: rgba(5, 6, 12, 0.72);
+      border-bottom: 1px solid var(--line);
+    }
+    .topbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      min-height: 4rem;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .brand-mark {
+      width: 2.4rem;
+      height: 2.4rem;
+      border-radius: 0.9rem;
+      background: linear-gradient(135deg, #f0abfc, #8b5cf6 48%, #3b82f6);
+      display: grid;
+      place-items: center;
+      color: white;
+      font-size: 0.95rem;
+      box-shadow: 0 10px 30px rgba(139, 92, 246, 0.35);
+    }
+    .brand span {
+      background: linear-gradient(90deg, #e879f9, #a78bfa 40%, #60a5fa);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .top-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+    .btn {
+      border: 0;
+      cursor: pointer;
+      border-radius: 999px;
+      padding: 0.65rem 1.1rem;
+      font: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: transform .15s ease, filter .15s ease, background .15s ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary {
+      color: white;
+      background: linear-gradient(135deg, #f0abfc, #8b5cf6 48%, #3b82f6);
+      box-shadow: 0 10px 28px rgba(139, 92, 246, 0.35);
+    }
+    .btn-ghost {
+      color: var(--text);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--line);
+    }
+
+    .hero {
+      padding: 3.5rem 0 2.5rem;
+      display: grid;
+      gap: 1.5rem;
+    }
+    .eyebrow {
+      width: fit-content;
+      padding: 0.35rem 0.8rem;
+      border-radius: 999px;
+      border: 1px solid rgba(232, 121, 249, 0.35);
+      background: rgba(232, 121, 249, 0.08);
+      color: #f0abfc;
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(1.8rem, 4vw, 3rem);
+      line-height: 1.35;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      max-width: 16ch;
+    }
+    .hero h1 em {
+      font-style: normal;
+      background: linear-gradient(90deg, #e879f9, #60a5fa);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .hero-lead {
+      margin: 0;
+      max-width: 46rem;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.7rem;
+    }
+    .chip {
+      padding: 0.45rem 0.85rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--line);
+      color: #d7dceb;
+      font-size: 0.85rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 1.5rem;
+      align-items: start;
+      padding-bottom: 4rem;
+    }
+    @media (max-width: 920px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc { position: static !important; }
+    }
+
+    .toc {
+      position: sticky;
+      top: 5rem;
+      padding: 1rem;
+      border-radius: var(--radius);
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+    .toc h2 {
+      margin: 0 0 0.8rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .toc a {
+      display: block;
+      padding: 0.45rem 0.7rem;
+      border-radius: 12px;
+      color: #c9d0e2;
+      font-size: 0.9rem;
+      margin-bottom: 0.2rem;
+      border-right: 2px solid transparent;
+    }
+    .toc a.active,
+    .toc a:hover {
+      background: rgba(167, 139, 250, 0.12);
+      color: white;
+      border-right-color: var(--fuchsia);
+    }
+
+    .content { display: grid; gap: 1.1rem; }
+    .card {
+      border-radius: var(--radius);
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      padding: 1.35rem 1.4rem 1.5rem;
+      scroll-margin-top: 5.5rem;
+      animation: rise .5s ease both;
+    }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: none; }
+    }
+    .card h2 {
+      margin: 0 0 0.7rem;
+      font-size: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+    }
+    .step-no {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 0.7rem;
+      display: grid;
+      place-items: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: white;
+      background: linear-gradient(135deg, #e879f9, #3b82f6);
+      flex-shrink: 0;
+    }
+    .card h3 {
+      margin: 1.2rem 0 0.5rem;
+      font-size: 1rem;
+      color: #e9e4f5;
+    }
+    .card p, .card li { color: #d5d8e4; }
+    .card ul, .card ol { padding-right: 1.2rem; }
+    .note {
+      margin: 1rem 0 0;
+      padding: 0.85rem 1rem;
+      border-radius: 16px;
+      background: rgba(96, 165, 250, 0.08);
+      border: 1px solid rgba(96, 165, 250, 0.25);
+      color: #dbeafe;
+      font-size: 0.92rem;
+    }
+    .warn {
+      background: rgba(251, 191, 36, 0.08);
+      border-color: rgba(251, 191, 36, 0.28);
+      color: #fde68a;
+    }
+    .ok {
+      background: rgba(52, 211, 153, 0.08);
+      border-color: rgba(52, 211, 153, 0.28);
+      color: #a7f3d0;
+    }
+
+    .ports {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.8rem;
+      margin-top: 1rem;
+    }
+    @media (max-width: 720px) { .ports { grid-template-columns: 1fr; } }
+    .port {
+      padding: 1rem;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--line);
+    }
+    .port strong { display: block; margin-bottom: 0.25rem; }
+    .port code {
+      display: inline-block;
+      margin-top: 0.55rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      background: rgba(232, 121, 249, 0.15);
+      color: #f5d0fe;
+      font-size: 0.85rem;
+    }
+
+    .url-banner {
+      margin-top: 1rem;
+      padding: 1rem 1.1rem;
+      border-radius: 18px;
+      background: linear-gradient(120deg, rgba(232,121,249,0.16), rgba(96,165,250,0.14));
+      border: 1px solid rgba(255,255,255,0.12);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 1.05rem;
+      letter-spacing: 0.02em;
+      direction: ltr;
+      text-align: left;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.8rem;
+      font-size: 0.92rem;
+      overflow: hidden;
+      border-radius: 16px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 0.7rem 0.8rem;
+      text-align: right;
+      vertical-align: top;
+    }
+    th { background: rgba(255,255,255,0.04); color: #e9e4f5; }
+    td { color: #d5d8e4; }
+
+    .code-wrap {
+      position: relative;
+      margin: 0.9rem 0 0;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: #0b0d16;
+    }
+    .code-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.55rem 0.8rem;
+      background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .copy {
+      border: 0;
+      cursor: pointer;
+      border-radius: 999px;
+      padding: 0.35rem 0.75rem;
+      background: rgba(255,255,255,0.08);
+      color: #e9e4f5;
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .copy.done { background: rgba(52, 211, 153, 0.2); color: #a7f3d0; }
+    pre {
+      margin: 0;
+      padding: 1rem 1.05rem;
+      overflow: auto;
+      direction: ltr;
+      text-align: left;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.84rem;
+      line-height: 1.65;
+      color: #e5e7eb;
+    }
+
+    .checklist label {
+      display: flex;
+      gap: 0.7rem;
+      align-items: flex-start;
+      padding: 0.7rem 0.8rem;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.03);
+      margin-top: 0.55rem;
+      cursor: pointer;
+    }
+    .checklist input { margin-top: 0.35rem; accent-color: #a78bfa; }
+    .checklist label.done { border-color: rgba(52,211,153,0.35); background: rgba(52,211,153,0.07); }
+    .checklist label.done span { color: #a7f3d0; text-decoration: line-through; }
+
+    .footer {
+      border-top: 1px solid var(--line);
+      padding: 2rem 0 2.5rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <div class="brand">
+        <div class="brand-mark">C</div>
+        <span>CIWA CRM</span>
+      </div>
+      <div class="top-actions">
+        <a class="btn btn-ghost" href="https://crm.ciwa.ir" target="_blank" rel="noopener">وب‌سایت محصول</a>
+        <a class="btn btn-primary" href="#start">شروع نصب</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <div class="eyebrow">راهنمای استقرار محلی · Ubuntu 26</div>
+      <h1>نصب <em>CIWA CRM</em> روی سرور دفتر</h1>
+      <p class="hero-lead">
+        روی یک اوبونتوی خام CRM را بالا بیاورید تا بقیهٔ کارمندان از مرورگر خودشان به همان سرور وصل شوند
+        و با حساب اختصاصی وارد شوند. نصب جدا روی سیستم هر کارمند لازم نیست.
+      </p>
+      <div class="hero-meta">
+        <span class="chip">اوبونتو ۲۴ / ۲۶</span>
+        <span class="chip">Docker + Node 22</span>
+        <span class="chip">دسترسی شبکه‌ای کارمندان</span>
+        <span class="chip">AGPLv3 · متن‌باز</span>
+      </div>
+    </section>
+
+    <div class="layout">
+      <aside class="toc" aria-label="فهرست مراحل">
+        <h2>مراحل</h2>
+        <a href="#overview">۱. تصویر کلی</a>
+        <a href="#start">۲. آماده‌سازی سرور</a>
+        <a href="#project">۳. آوردن پروژه</a>
+        <a href="#env">۴. تنظیم .env</a>
+        <a href="#core">۵. دیتابیس و هسته</a>
+        <a href="#apps">۶. میان‌افزار و رابط</a>
+        <a href="#systemd">۷. سرویس دائمی</a>
+        <a href="#firewall">۸. فایروال</a>
+        <a href="#users">۹. کاربران</a>
+        <a href="#checklist">۱۰. چک‌لیست</a>
+        <a href="#update">۱۱. به‌روزرسانی</a>
+        <a href="#troubleshoot">۱۲. عیب‌یابی</a>
+      </aside>
+
+      <div class="content">
+        <article class="card" id="overview">
+          <h2><span class="step-no">۱</span> تصویر کلی</h2>
+          <p>سه لایه روی سرور اجرا می‌شود. کارمند فقط رابط را در مرورگر باز می‌کند.</p>
+          <div class="ports">
+            <div class="port">
+              <strong>هسته + دیتابیس</strong>
+              <div>MariaDB و CRM هسته داخل Docker</div>
+              <code>:8081</code>
+            </div>
+            <div class="port">
+              <strong>میان‌افزار</strong>
+              <div>ورود و پروکسی امن API</div>
+              <code>:8787</code>
+            </div>
+            <div class="port">
+              <strong>رابط CIWA</strong>
+              <div>همان صفحهٔ کاری کارمند</div>
+              <code>:8443</code>
+            </div>
+          </div>
+          <div class="url-banner">http://IP-سرور:8443</div>
+          <p class="note ok">مثال: اگر IP سرور <b>192.168.1.50</b> باشد، کارمند می‌رود به <b dir="ltr">http://192.168.1.50:8443</b></p>
+        </article>
+
+        <article class="card" id="start">
+          <h2><span class="step-no">۲</span> آماده‌سازی سرور</h2>
+          <p>با کاربر عادی دارای <code>sudo</code> وارد شوید.</p>
+
+          <h3>۲.۱ به‌روزرسانی سیستم</h3>
+          <div class="code-wrap" data-lang="bash">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>sudo apt update
+sudo apt upgrade -y
+sudo apt install -y ca-certificates curl git ufw</pre>
+          </div>
+
+          <h3>۲.۲ نصب Docker</h3>
+          <div class="code-wrap" data-lang="bash">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>sudo apt install -y docker.io docker-compose-v2
+sudo systemctl enable --now docker
+sudo usermod -aG docker "$USER"</pre>
+          </div>
+          <p class="note">یک‌بار از نشست خارج شوید و دوباره وارد شوید تا گروه docker اعمال شود. سپس <code>docker compose version</code> را بدون sudo تست کنید.</p>
+
+          <h3>۲.۳ نصب Node.js 22 و pnpm</h3>
+          <div class="code-wrap" data-lang="bash">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+sudo npm install -g pnpm@10.34.3
+node -v
+pnpm -v</pre>
+          </div>
+        </article>
+
+        <article class="card" id="project">
+          <h2><span class="step-no">۳</span> آوردن پروژه روی سرور</h2>
+          <h3>روش الف) کلون از گیت</h3>
+          <div class="code-wrap">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>cd ~
+git clone &lt;آدرس-ریپوی-شما&gt; crm.ciwa.ir
+cd crm.ciwa.ir</pre>
+          </div>
+          <h3>روش ب) کپی از کامپیوتر فعلی</h3>
+          <p>پوشهٔ پروژه را با <code>scp</code> یا <code>rsync</code> به سرور بفرستید و داخل همان پوشه بروید:</p>
+          <div class="code-wrap">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>cd ~/crm.ciwa.ir</pre>
+          </div>
+        </article>
+
+        <article class="card" id="env">
+          <h2><span class="step-no">۴</span> تنظیم فایل .env برای شبکه</h2>
+          <div class="code-wrap">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>cp env.example .env
+nano .env</pre>
+          </div>
+          <p>IP سرور روی شبکهٔ داخلی:</p>
+          <div class="code-wrap">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>hostname -I | awk '{print $1}'</pre>
+          </div>
+          <p>نمونهٔ تنظیم با IP فرضی <b dir="ltr">192.168.1.50</b> — رمزها را عوض کنید:</p>
+          <div class="code-wrap">
+            <div class="code-bar"><span>.env</span><button class="copy" type="button">کپی</button></div>
+            <pre>CIWA_DB_NAME=ciwa
+CIWA_DB_USER=ciwa
+CIWA_DB_PASSWORD=یک-رمز-قوی
+MARIADB_ROOT_PASSWORD=یک-رمز-قوی-دیگر
+CIWA_ADMIN_PASSWORD=رمز-ادمین-اولیه
+CIWA_CLIENT_ID=ciwa-integration
+CIWA_CLIENT_SECRET=یک-رمز-بلند-تصادفی
+
+CIWA_PUBLIC_URL=http://192.168.1.50:8443
+CIWA_CORE_PUBLIC_URL=http://192.168.1.50:8081
+CIWA_CORE_URL=http://127.0.0.1:8081</pre>
+          </div>
+          <ul>
+            <li>به‌جای IP نمونه، IP واقعی سرور را بگذارید.</li>
+            <li>اگر دامنهٔ داخلی دارید، همان را جایگزین کنید.</li>
+            <li>برای HTTP داخل شبکه، <code>CIWA_COOKIE_SECURE</code> را فعال نکنید.</li>
+          </ul>
+          <div class="code-wrap">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>echo "HOST_UID=$(id -u)" >> .env
+echo "HOST_GID=$(id -g)" >> .env</pre>
+          </div>
+        </article>
+
+        <article class="card" id="core">
+          <h2><span class="step-no">۵</span> بالا آوردن پایگاه داده و هسته</h2>
+          <div class="code-wrap">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>cd ~/crm.ciwa.ir
+docker compose up -d db crm</pre>
+          </div>
+          <div class="code-wrap">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>docker compose ps
+curl -sI http://127.0.0.1:8081 | head -5</pre>
+          </div>
+          <p class="note warn">اولین اجرا ممکن است چند دقیقه طول بکشد (Composer و نصب خاموش هسته). اگر خطا بود: <code>docker compose logs -f crm</code></p>
+        </article>
+
+        <article class="card" id="apps">
+          <h2><span class="step-no">۶</span> میان‌افزار و رابط</h2>
+          <h3>۶.۱ میان‌افزار</h3>
+          <div class="code-wrap">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>cd ~/crm.ciwa.ir
+set -a
+source .env
+set +a
+node integration/server.mjs</pre>
+          </div>
+          <p>اگر پورت <code>8787</code> گوش داد، درست است. با <code>Ctrl+C</code> قطع کنید؛ در مرحله بعد سرویس دائمی می‌سازیم.</p>
+          <div class="code-wrap">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>curl -s http://127.0.0.1:8787/api/session</pre>
+          </div>
+          <p class="note">باید شبیه «وارد نشده‌اید» برگردد، نه خطای اتصال.</p>
+
+          <h3>۶.۲ رابط</h3>
+          <div class="code-wrap">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>cd ~/crm.ciwa.ir/frontend
+pnpm install
+pnpm build
+pnpm preview --host 0.0.0.0 --port 8443</pre>
+          </div>
+          <p class="note ok">برای دفتر، <code>preview</code> پایدارتر از <code>pnpm dev</code> است.</p>
+        </article>
+
+        <article class="card" id="systemd">
+          <h2><span class="step-no">۷</span> سرویس دائمی با systemd</h2>
+          <p class="note warn">مسیرها و نام کاربر (<code>hossein</code>) را با واقعیت سرور خودتان عوض کنید.</p>
+
+          <h3>۷.۱ سرویس میان‌افزار</h3>
+          <div class="code-wrap">
+            <div class="code-bar"><span>systemd</span><button class="copy" type="button">کپی</button></div>
+            <pre>sudo tee /etc/systemd/system/ciwa-integration.service >/dev/null &lt;&lt;'EOF'
+[Unit]
+Description=CIWA CRM Integration
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=hossein
+WorkingDirectory=/home/hossein/crm.ciwa.ir
+EnvironmentFile=/home/hossein/crm.ciwa.ir/.env
+Environment=PORT=8787
+ExecStart=/usr/bin/node integration/server.mjs
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF</pre>
+          </div>
+
+          <h3>۷.۲ سرویس رابط</h3>
+          <div class="code-wrap">
+            <div class="code-bar"><span>systemd</span><button class="copy" type="button">کپی</button></div>
+            <pre>sudo tee /etc/systemd/system/ciwa-frontend.service >/dev/null &lt;&lt;'EOF'
+[Unit]
+Description=CIWA CRM Frontend
+After=network.target ciwa-integration.service
+Requires=ciwa-integration.service
+
+[Service]
+Type=simple
+User=hossein
+WorkingDirectory=/home/hossein/crm.ciwa.ir/frontend
+Environment=PORT=8443
+Environment=CIWA_INTEGRATION_URL=http://127.0.0.1:8787
+ExecStart=/usr/bin/pnpm preview --host 0.0.0.0 --port 8443
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF</pre>
+          </div>
+
+          <h3>فعال‌سازی</h3>
+          <div class="code-wrap">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>sudo systemctl daemon-reload
+sudo systemctl enable --now docker
+sudo systemctl enable --now ciwa-integration ciwa-frontend
+sudo systemctl status ciwa-integration --no-pager
+sudo systemctl status ciwa-frontend --no-pager</pre>
+          </div>
+          <div class="code-wrap">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>cd ~/crm.ciwa.ir
+docker compose up -d db crm</pre>
+          </div>
+        </article>
+
+        <article class="card" id="firewall">
+          <h2><span class="step-no">۸</span> باز کردن فایروال</h2>
+          <div class="code-wrap">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>sudo ufw allow OpenSSH
+sudo ufw allow 8443/tcp comment 'CIWA CRM UI'
+sudo ufw enable
+sudo ufw status</pre>
+          </div>
+          <p>کارمند معمولاً فقط به پورت <code>8443</code> نیاز دارد.</p>
+        </article>
+
+        <article class="card" id="users">
+          <h2><span class="step-no">۹</span> ورود اول و ساخت کاربر</h2>
+          <ol>
+            <li>از یک سیستم داخل شبکه بروید به <code dir="ltr">http://IP-سرور:8443</code></li>
+            <li>با کاربر <code>admin</code> و رمز <code>CIWA_ADMIN_PASSWORD</code> وارد شوید.</li>
+            <li>از منو به بخش <b>کاربران</b> بروید و برای هر کارمند حساب بسازید.</li>
+            <li>رمز ادمین را بعد از ورود اول عوض کنید.</li>
+          </ol>
+          <p class="note ok">هر کارمند فقط همان آدرس را در مرورگر باز می‌کند و با حساب خودش وارد می‌شود. نصب روی سیستم کارمند لازم نیست.</p>
+        </article>
+
+        <article class="card" id="checklist">
+          <h2><span class="step-no">۱۰</span> چک‌لیست تحویل</h2>
+          <p>وضعیت تیک‌ها در همین مرورگر ذخیره می‌شود.</p>
+          <div class="checklist" id="checks">
+            <label><input type="checkbox" data-k="1" /><span><code>docker compose ps</code> وضعیت db و crm را up نشان می‌دهد</span></label>
+            <label><input type="checkbox" data-k="2" /><span><code>systemctl is-active ciwa-integration</code> → active</span></label>
+            <label><input type="checkbox" data-k="3" /><span><code>systemctl is-active ciwa-frontend</code> → active</span></label>
+            <label><input type="checkbox" data-k="4" /><span>از یک سیستم دیگر در شبکه، آدرس UI باز می‌شود</span></label>
+            <label><input type="checkbox" data-k="5" /><span>ورود با admin موفق است</span></label>
+            <label><input type="checkbox" data-k="6" /><span>حداقل یک کاربر کارمند ساخته و تست شده</span></label>
+            <label><input type="checkbox" data-k="7" /><span>در <code>.env</code> برای <code>CIWA_PUBLIC_URL</code> دیگر localhost نیست</span></label>
+          </div>
+        </article>
+
+        <article class="card" id="update">
+          <h2><span class="step-no">۱۱</span> به‌روزرسانی بعدی</h2>
+          <div class="code-wrap">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>cd ~/crm.ciwa.ir
+git pull
+docker compose up -d --build db crm
+cd frontend && pnpm install && pnpm build
+sudo systemctl restart ciwa-integration ciwa-frontend</pre>
+          </div>
+        </article>
+
+        <article class="card" id="troubleshoot">
+          <h2><span class="step-no">۱۲</span> عیب‌یابی سریع</h2>
+          <table>
+            <thead>
+              <tr><th>مشکل</th><th>کار پیشنهادی</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>از سیستم دیگر صفحه باز نمی‌شود</td><td>IP سرور، ufw و گوش‌دادن پورت 8443 را چک کنید</td></tr>
+              <tr><td>صفحه باز است ولی ورود خطا می‌دهد</td><td><code>systemctl status ciwa-integration</code> و لاگ هسته</td></tr>
+              <tr><td>بعد از ریبوت قطع است</td><td><code>docker compose up -d</code> و start سرویس‌ها</td></tr>
+              <tr><td>کوکی/نشست عجیب است</td><td>کارمند باید دقیقاً همان <code>CIWA_PUBLIC_URL</code> را باز کند</td></tr>
+              <tr><td>pnpm در سرویس پیدا نمی‌شود</td><td>مسیر کامل <code>which pnpm</code> را در ExecStart بگذارید</td></tr>
+            </tbody>
+          </table>
+          <div class="code-wrap">
+            <div class="code-bar"><span>logs</span><button class="copy" type="button">کپی</button></div>
+            <pre>journalctl -u ciwa-integration -f
+journalctl -u ciwa-frontend -f
+docker compose -f ~/crm.ciwa.ir/docker-compose.yml logs -f crm</pre>
+          </div>
+
+          <h3>اختیاری: همه داخل Docker</h3>
+          <div class="code-wrap">
+            <div class="code-bar"><span>terminal</span><button class="copy" type="button">کپی</button></div>
+            <pre>cd ~/crm.ciwa.ir
+docker compose --profile container up -d</pre>
+          </div>
+
+          <div class="note" style="margin-top:1.2rem">
+            <b>برای کارمند:</b> برو به <span dir="ltr">http://IP-سرور:8443</span>، با کاربری که ادمین برایت ساخته وارد شو.
+          </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="shell footer-inner">
+      <div>CIWA CRM · متن‌باز تحت AGPLv3 · <a href="https://crm.ciwa.ir" target="_blank" rel="noopener">crm.ciwa.ir</a></div>
+      <div>این صفحه یک فایل HTML مستقل است و مستقیم روی سایت قابل آپلود است.</div>
+    </div>
+  </footer>
+
+  <script>
+    document.querySelectorAll('.code-wrap').forEach((wrap) => {
+      const btn = wrap.querySelector('.copy')
+      const pre = wrap.querySelector('pre')
+      if (!btn || !pre) return
+      btn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(pre.innerText)
+          btn.textContent = 'کپی شد'
+          btn.classList.add('done')
+          setTimeout(() => {
+            btn.textContent = 'کپی'
+            btn.classList.remove('done')
+          }, 1400)
+        } catch {
+          btn.textContent = 'خطا'
+        }
+      })
+    })
+
+    const links = [...document.querySelectorAll('.toc a')]
+    const sections = links.map((link) => document.querySelector(link.getAttribute('href'))).filter(Boolean)
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return
+        const id = '#' + entry.target.id
+        links.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === id))
+      })
+    }, { rootMargin: '-40% 0px -50% 0px', threshold: 0.01 })
+    sections.forEach((section) => io.observe(section))
+
+    const key = 'ciwa-install-checklist-v1'
+    const saved = JSON.parse(localStorage.getItem(key) || '{}')
+    document.querySelectorAll('#checks input').forEach((input) => {
+      const k = input.dataset.k
+      input.checked = Boolean(saved[k])
+      input.closest('label').classList.toggle('done', input.checked)
+      input.addEventListener('change', () => {
+        saved[k] = input.checked
+        localStorage.setItem(key, JSON.stringify(saved))
+        input.closest('label').classList.toggle('done', input.checked)
+      })
+    })
+  </script>
+</body>
+</html>

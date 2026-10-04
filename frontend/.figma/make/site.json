@@ -1,0 +1,12 @@
+{
+  "title": "CIWA CRM",
+  "language": "fa",
+  "description": "A premium Persian RTL CRM dashboard for SaaS businesses to manage sales, contacts, tasks, and analytics with AI-powered insights and elegant design.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

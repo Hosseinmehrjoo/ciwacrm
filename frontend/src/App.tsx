@@ -1,0 +1,647 @@
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useSession, SessionProvider } from './auth/SessionProvider'
+import { LoginScreen } from './views/LoginScreen'
+import { ModuleView } from './views/ModuleView'
+import { DashboardView, SettingsView } from './views/DashboardView'
+import { AiView } from './views/AiView'
+import { canAccessModule, groupLabel, moduleById, visibleGroupOrder, visibleModules } from './crm/modules'
+import { useTheme } from './theme/useTheme'
+import { useAddons } from './addons/useAddons'
+import { AddonScreen, AddonsView } from './views/AddonsView'
+import { Softphone } from './widgets/Softphone'
+import { SupportView } from './views/SupportView'
+import { CalendarView } from './views/CalendarView'
+import { CustomerWorktray } from './views/CustomerWorktray'
+import { InvoiceBuilder } from './views/InvoiceBuilder'
+import { BusyIndicator, LoadingMark } from './ui/LoadingMark'
+import {
+  LayoutDashboard, Users, TrendingUp, Ticket, Megaphone,
+  CheckSquare, Calendar, BarChart2, Briefcase,
+  DollarSign, Brain, Settings, Bell, Search, Sun, Moon, Menu, X, Puzzle, LifeBuoy,
+  Zap, ChevronDown, ChevronLeft, Plus,
+} from 'lucide-react'
+
+const groupIcons = {
+  people: Users,
+  sales: TrendingUp,
+  finance: DollarSign,
+  marketing: Megaphone,
+  activity: Calendar,
+  support: Ticket,
+  projects: CheckSquare,
+  insight: BarChart2,
+  admin: Settings,
+} as const
+
+const quickActions = [
+  { id: 'contacts', label: 'افزودن مخاطب' },
+  { id: 'accounts', label: 'افزودن مشتری' },
+  { id: 'leads', label: 'افزودن سرنخ' },
+  { id: 'opportunities', label: 'افزودن فرصت فروش' },
+  { id: 'invoices', label: 'افزودن فاکتور' },
+  { id: 'quotes', label: 'افزودن پیش‌فاکتور' },
+  { id: 'cases', label: 'افزودن تیکت' },
+  { id: 'tasks', label: 'افزودن وظیفه' },
+  { id: 'meetings', label: 'افزودن قرار' },
+  { id: 'calls', label: 'افزودن تماس' },
+  { id: 'notes', label: 'افزودن یادداشت' },
+] as const
+
+// ── Sub-components ─────────────────────────────────────────────────────────
+
+function QuickActions({ onPick }: { onPick: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onPointer(event: PointerEvent) {
+      if (!root.current?.contains(event.target as Node)) setOpen(false)
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointer)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onPointer)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  return (
+    <div ref={root} className="relative shrink-0">
+      <button
+        type="button"
+        className={`quick-trigger flex h-10 items-center gap-1.5 rounded-2xl px-3 text-xs font-semibold ${open ? 'active' : ''}`}
+        aria-expanded={open}
+        aria-controls="quick-actions"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <Zap size={15} className="shrink-0" />
+        <span>عملکرد سریع</span>
+        <ChevronDown size={14} className={`shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div id="quick-actions" className="quick-menu absolute right-0 z-30 mt-2 w-52 rounded-2xl p-1.5 flex flex-col gap-0.5" role="menu">
+          {quickActions.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              role="menuitem"
+              className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-right text-xs font-medium text-slate-600 hover:bg-white/10"
+              onClick={() => {
+                setOpen(false)
+                onPick(action.id)
+              }}
+            >
+              <Plus size={13} className="shrink-0" />
+              <span>{action.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SubmenuList({ items }: { items: { id: string; label: string; active: boolean; onSelect: () => void }[] }) {
+  return (
+    <div className="flex flex-col gap-0.5" role="group">
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className={`sidebar-item w-full rounded-xl px-3 py-2 text-right text-xs font-medium ${item.active ? 'active' : 'text-slate-500'}`}
+          aria-current={item.active ? 'page' : undefined}
+          onClick={item.onSelect}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function NavGroup({
+  id,
+  label,
+  icon: Icon,
+  items,
+  locked,
+  hovered,
+  opened,
+  canHover,
+  onToggle,
+  onHoverChange,
+}: {
+  id: string
+  label: string
+  icon: typeof Users
+  items: { id: string; label: string; active: boolean; onSelect: () => void }[]
+  locked: boolean
+  hovered: boolean
+  opened: boolean
+  canHover: boolean
+  onToggle: () => void
+  onHoverChange: (id: string | null) => void
+}) {
+  const row = useRef<HTMLButtonElement>(null)
+  const [box, setBox] = useState<{ top: number; left: number; maxHeight: number } | null>(null)
+  const showInline = locked || opened || (!canHover && hovered)
+  const showFlyout = canHover && hovered && !showInline
+
+  function place() {
+    const anchor = row.current
+    if (!anchor) return
+    const rect = anchor.getBoundingClientRect()
+    const width = 224
+    const margin = 8
+    const maxHeight = Math.min(384, window.innerHeight - margin * 2)
+    let left = rect.left - width + 10
+    if (left < margin) left = margin
+    let top = rect.top
+    if (top + 160 > window.innerHeight - margin) top = Math.max(margin, window.innerHeight - margin - Math.min(maxHeight, 220))
+    setBox({ top, left, maxHeight })
+  }
+
+  useEffect(() => {
+    if (!showFlyout) return
+    place()
+    const nav = row.current?.closest('nav')
+    const onMove = () => place()
+    nav?.addEventListener('scroll', onMove, { passive: true })
+    window.addEventListener('resize', onMove)
+    return () => {
+      nav?.removeEventListener('scroll', onMove)
+      window.removeEventListener('resize', onMove)
+    }
+  }, [showFlyout])
+
+  return (
+    <div
+      className="nav-group"
+      onMouseEnter={() => {
+        if (canHover) onHoverChange(id)
+      }}
+      onMouseLeave={() => {
+        if (canHover) onHoverChange(null)
+      }}
+    >
+      <button
+        ref={row}
+        type="button"
+        className={`sidebar-item nav-parent w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-right ${locked ? 'active' : 'text-slate-500'}`}
+        aria-expanded={showInline || showFlyout}
+        aria-controls={`nav-${id}`}
+        onClick={onToggle}
+      >
+        <Icon size={17} className="shrink-0" />
+        <span className="flex-1">{label}</span>
+        <ChevronLeft size={14} className={`shrink-0 transition-transform duration-200 ${showInline ? '-rotate-90' : ''}`} />
+      </button>
+      {showInline && (
+        <div id={`nav-${id}`} className="nav-sub quick-menu mt-1">
+          <SubmenuList items={items} />
+        </div>
+      )}
+      {showFlyout && box && createPortal(
+        <div
+          id={showInline ? undefined : `nav-${id}`}
+          className="vision-app nav-flyout quick-menu"
+          style={{ top: box.top, left: box.left, maxHeight: box.maxHeight }}
+          onMouseEnter={() => onHoverChange(id)}
+          onMouseLeave={() => onHoverChange(null)}
+        >
+          <p className="nav-flyout-title">{label}</p>
+          <SubmenuList items={items} />
+        </div>,
+        document.querySelector('.vision-app') ?? document.body,
+      )}
+    </div>
+  )
+}
+
+function SidebarItem({ icon: Icon, label, active, onClick }: { icon: any, label: string, active?: boolean, onClick?: () => void }) {
+  return (
+    <button type="button" onClick={onClick} aria-current={active ? 'page' : undefined} className={`sidebar-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-right ${active ? 'active' : 'text-slate-500'}`}>
+      <Icon size={17} className="shrink-0" />
+      <span>{label}</span>
+    </button>
+  )
+}
+
+// ── Main App ───────────────────────────────────────────────────────────────
+
+export default function App() {
+  return (
+    <SessionProvider>
+      <BusyIndicator />
+      <CrmShell />
+    </SessionProvider>
+  )
+}
+
+function CrmShell() {
+  const session = useSession()
+  const { theme, toggleTheme } = useTheme()
+  const addons = useAddons(session.status === 'authenticated')
+  const [section, setSection] = useState('dashboard')
+  const [createRequest, setCreateRequest] = useState<{ id: string; token: number; defaults?: Record<string, string> } | null>(null)
+  const [lockedGroup, setLockedGroup] = useState<string | null>(null)
+  const [hoverGroup, setHoverGroup] = useState<string | null>(null)
+  const [menuGroup, setMenuGroup] = useState<string | null>(null)
+  const [headerQuery, setHeaderQuery] = useState('')
+  const [phoneOpen, setPhoneOpen] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)
+  const [compactNav, setCompactNav] = useState(() => window.matchMedia('(max-width: 1023px)').matches)
+  const phoneSeen = useRef<boolean | null>(null)
+  const hoverTimer = useRef<number | null>(null)
+  const phoneAddon = addons.addons.find((addon) => addon.installed && addon.widget === 'softphone')
+  const [canHover, setCanHover] = useState(() => window.matchMedia('(hover: hover) and (pointer: fine)').matches)
+
+  useEffect(() => {
+    if (!addons.ready) return
+    const installed = Boolean(phoneAddon)
+    if (phoneSeen.current === null) {
+      phoneSeen.current = installed
+      return
+    }
+    if (!phoneSeen.current && installed) setPhoneOpen(true)
+    if (!installed) setPhoneOpen(false)
+    phoneSeen.current = installed
+  }, [addons.ready, phoneAddon])
+
+  function rememberGroup(id: string) {
+    const mod = moduleById(id)
+    if (mod) setLockedGroup(mod.group)
+    else if (id === 'calendar') setLockedGroup('activity')
+    else if (id === 'customer-worktray') setLockedGroup(null)
+    else if (id === 'addon-store' || id.startsWith('addon:')) setLockedGroup('addons')
+    else setLockedGroup(null)
+    setMenuGroup(null)
+    setHoverGroup(null)
+  }
+
+  function pointMenu(id: string | null) {
+    if (hoverTimer.current != null) window.clearTimeout(hoverTimer.current)
+    hoverTimer.current = null
+    if (id) setHoverGroup(id)
+    else hoverTimer.current = window.setTimeout(() => setHoverGroup(null), 140)
+  }
+
+  function openSection(id: string) {
+    const target = moduleById(id)
+    if (target && !canAccessModule(target, Boolean(session.user?.isAdmin))) {
+      setSection('dashboard')
+      setNavOpen(false)
+      setLockedGroup(null)
+      return
+    }
+    if (id === 'addon-store' && !session.user?.isAdmin && !session.demo) {
+      setSection('dashboard')
+      setNavOpen(false)
+      setLockedGroup(null)
+      return
+    }
+    setHeaderQuery('')
+    setSection(id)
+    setNavOpen(false)
+    rememberGroup(id)
+  }
+
+  function quickCreate(id: string, defaults?: Record<string, string>) {
+    const target = moduleById(id)
+    if (target && !canAccessModule(target, Boolean(session.user?.isAdmin))) return
+    setHeaderQuery('')
+    setCreateRequest({ id, token: Date.now(), defaults })
+    setSection(id)
+    setNavOpen(false)
+    rememberGroup(id)
+  }
+
+  function openAddon(target: string) {
+    const id = target.replace(/^addon:/, '')
+    const addon = addons.addons.find((item) => item.id === id)
+    setNavOpen(false)
+    if (addon?.widget === 'softphone') {
+      setLockedGroup('addons')
+      setMenuGroup(null)
+      setHoverGroup(null)
+      setPhoneOpen(true)
+      return
+    }
+    openSection(target.startsWith('addon:') ? target : `addon:${id}`)
+  }
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1023px)')
+    const sync = () => {
+      setCompactNav(media.matches)
+      if (!media.matches) setNavOpen(false)
+    }
+    media.addEventListener('change', sync)
+    return () => media.removeEventListener('change', sync)
+  }, [])
+
+  useEffect(() => {
+    const media = window.matchMedia('(hover: hover) and (pointer: fine)')
+    const sync = () => setCanHover(media.matches)
+    media.addEventListener('change', sync)
+    return () => {
+      media.removeEventListener('change', sync)
+      if (hoverTimer.current != null) window.clearTimeout(hoverTimer.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!navOpen) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setNavOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = previous
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [navOpen])
+
+  if (session.status === 'loading') {
+    return (
+      <div className="vision-app min-h-screen grid place-items-center">
+        <div className="glass-card rounded-[28px] px-10 py-8 flex flex-col items-center gap-4" role="status" aria-live="polite">
+          <LoadingMark label="در حال بررسی نشست..." large />
+        </div>
+      </div>
+    )
+  }
+
+  if (session.status !== 'authenticated') return <LoginScreen />
+
+  const displayName = session.user?.fullName || 'کاربر'
+  const isAdmin = Boolean(session.demo || session.user?.isAdmin)
+  const roleLabel = session.demo ? 'نمای نمونه' : isAdmin ? 'مدیر سیستم' : 'کارمند'
+  const initials = displayName.replace(/\s+/g, '').slice(0, 2)
+  const navModules = visibleModules(isAdmin)
+  const navGroups = visibleGroupOrder(isAdmin)
+  const addonItems = [
+    ...addons.addons.filter((addon) => addon.installed).map((addon) => ({
+      id: addon.id,
+      label: addon.navLabel,
+      active: addon.widget === 'softphone' ? phoneOpen : section === `addon:${addon.id}`,
+      onSelect: () => openAddon(`addon:${addon.id}`),
+    })),
+    ...(isAdmin ? [{
+      id: 'addon-store',
+      label: 'نصب ماژول جدید',
+      active: section === 'addon-store',
+      onSelect: () => openSection('addon-store'),
+    }] : []),
+  ]
+
+  return (
+    <div className="vision-app flex min-h-screen" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>
+
+      {navOpen && (
+        <button
+          type="button"
+          aria-label="بستن منو"
+          className="fixed inset-0 z-20 bg-black/50 lg:hidden"
+          onClick={() => setNavOpen(false)}
+        />
+      )}
+
+      <aside
+        id="app-nav"
+        inert={compactNav && !navOpen ? true : undefined}
+        aria-hidden={compactNav && !navOpen}
+        className={`glass-sidebar w-[min(18rem,88vw)] lg:w-60 shrink-0 fixed z-30 flex flex-col overflow-hidden top-0 bottom-0 right-0 rounded-none transition-transform duration-200 lg:top-3 lg:bottom-3 lg:right-3 lg:rounded-[28px] lg:translate-x-0 ${navOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}`}
+      >
+
+        <div className="p-4 flex items-center justify-between border-b border-white/10">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <img
+              src="/ciwa-brand.jpg"
+              alt="ciwaCRM"
+              className="h-10 w-10 rounded-xl object-cover"
+            />
+            <div>
+              <p className="text-sm font-bold leading-none brand-text">CIWA CRM</p>
+              <p className="text-xs text-slate-400 mt-0.5">v2026.1</p>
+            </div>
+          </div>
+          <button type="button" aria-label="بستن منو" className="lg:hidden w-9 h-9 rounded-lg flex items-center justify-center text-slate-300 hover:bg-white/10" onClick={() => setNavOpen(false)}>
+            <X size={16} />
+          </button>
+        </div>
+
+        <nav className="flex-1 p-3 flex flex-col gap-0.5 overflow-y-auto">
+          <SidebarItem icon={LayoutDashboard} label="داشبورد" active={section === 'dashboard'} onClick={() => openSection('dashboard')} />
+          <SidebarItem icon={Briefcase} label="کارتابل مشتری" active={section === 'customer-worktray'} onClick={() => openSection('customer-worktray')} />
+          {navGroups.map((group) => (
+            <NavGroup
+              key={group}
+              id={group}
+              label={groupLabel[group]}
+              icon={groupIcons[group]}
+              locked={lockedGroup === group}
+              hovered={hoverGroup === group}
+              opened={menuGroup === group}
+              canHover={canHover}
+              onToggle={() => setMenuGroup((current) => current === group ? null : group)}
+              onHoverChange={pointMenu}
+              items={[
+                ...(group === 'activity' ? [{
+                  id: 'calendar',
+                  label: 'تقویم',
+                  active: section === 'calendar',
+                  onSelect: () => openSection('calendar'),
+                }] : []),
+                ...navModules.filter((item) => item.group === group).map((item) => ({
+                  id: item.id,
+                  label: item.label,
+                  active: section === item.id,
+                  onSelect: () => openSection(item.id),
+                })),
+              ]}
+            />
+          ))}
+          {addonItems.length > 0 && (
+          <NavGroup
+            id="addons"
+            label="ماژول‌ها"
+            icon={Puzzle}
+            items={addonItems}
+            locked={lockedGroup === 'addons'}
+            hovered={hoverGroup === 'addons'}
+            opened={menuGroup === 'addons'}
+            canHover={canHover}
+            onToggle={() => setMenuGroup((current) => current === 'addons' ? null : 'addons')}
+            onHoverChange={pointMenu}
+          />
+          )}
+          <SidebarItem icon={Brain} label="هوش مصنوعی" active={section === 'ai'} onClick={() => openSection('ai')} />
+          <SidebarItem icon={Settings} label="تنظیمات" active={section === 'settings'} onClick={() => openSection('settings')} />
+        </nav>
+
+        <div className="p-3 pb-4">
+          <div className={`glass-card rounded-[22px] p-4 ${section === 'support' ? 'ring-1 ring-white/30' : ''}`}>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center mb-3"
+              style={{ background: 'rgba(232,121,249,0.2)', border: '1px solid rgba(232,121,249,0.35)' }}>
+              <LifeBuoy size={16} className="ciwa-accent" />
+            </div>
+            <p className="text-sm font-semibold text-slate-800 mb-1">پشتیبانی</p>
+            <p className="text-xs text-slate-400 leading-5 mb-3">اگر به مشکل خوردید، با ما در تماس باشید.</p>
+            <button type="button" className="btn-primary w-full rounded-xl py-2 text-xs font-semibold" onClick={() => openSection('support')}>
+              تماس با پشتیبانی
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* ── Main Content ───────────────────────────────────────── */}
+      <main className="flex-1 min-w-0 lg:mr-[16.5rem] flex flex-col min-h-screen">
+
+        <header className="glass-bar sticky top-3 z-10 mx-3 mt-3 flex flex-col gap-3 px-3 py-3 rounded-[24px] sm:mx-4 lg:flex-row lg:items-center lg:justify-between lg:px-4 lg:gap-4">
+
+          {/* User info */}
+          <div className="flex items-center gap-2 min-w-0 sm:gap-3">
+            <button
+              type="button"
+              aria-label="منو"
+              aria-expanded={navOpen}
+              aria-controls="app-nav"
+              className="lg:hidden w-9 h-9 shrink-0 rounded-xl flex items-center justify-center text-slate-600 hover:bg-white/10"
+              onClick={() => setNavOpen(true)}
+            >
+              <Menu size={18} />
+            </button>
+            <div className="flex flex-col items-end min-w-0">
+              <p className="text-sm font-semibold text-slate-800 leading-none truncate max-w-[7.5rem] sm:max-w-none">{displayName}</p>
+              <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">{roleLabel}</p>
+            </div>
+            <div className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-white text-sm font-semibold"
+              style={{ background: 'linear-gradient(135deg, #e879f9, #6366f1 50%, #3b82f6)' }}>
+              {initials}
+            </div>
+            <div className="hidden sm:block w-px h-8 bg-white/15" />
+            {/* Icons */}
+            <div className="flex items-center gap-0.5 mr-auto sm:mr-0 sm:gap-1">
+              <button type="button" onClick={() => void session.logout()} className="px-2.5 h-8 rounded-xl text-xs font-medium text-slate-600 hover:bg-white">
+                خروج
+              </button>
+              <button type="button" aria-label="اعلان‌ها" className="relative w-8 h-8 rounded-xl flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-700 transition-all">
+                <Bell size={17} aria-hidden="true" />
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 border border-white" />
+              </button>
+              <button
+                type="button"
+                aria-label={theme === 'dark' ? 'حالت روشن' : 'حالت تیره'}
+                aria-pressed={theme === 'light'}
+                onClick={toggleTheme}
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-700 transition-all"
+              >
+                {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+              </button>
+              <button type="button" aria-label="تنظیمات" onClick={() => openSection('settings')} className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-700 transition-all">
+                <Settings size={17} />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex w-full items-center gap-2 lg:max-w-xl lg:flex-1">
+            <QuickActions onPick={quickCreate} />
+            <div className="relative min-w-0 flex-1">
+              <input
+                type="text"
+                value={headerQuery}
+                onChange={(event) => {
+                  setHeaderQuery(event.target.value)
+                  if (!moduleById(section)) {
+                    setSection('contacts')
+                    setLockedGroup('people')
+                  }
+                }}
+                placeholder="جستجو در بخش فعلی..."
+                aria-label="جستجو"
+                className="w-full pl-4 pr-10 py-2.5 rounded-2xl text-sm glass-input outline-none"
+                style={{ direction: 'rtl' }}
+              />
+              <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            </div>
+          </div>
+        </header>
+
+        <div className="flex-1 min-w-0 p-3 sm:p-5 flex flex-col gap-5 overflow-y-auto">
+          {session.demo && (
+            <p className="text-sm text-slate-700 bg-white border border-slate-200 rounded-2xl px-4 py-3">
+              هسته در دسترس نیست. این نما داده نمونه است و ذخیره نمی‌شود.
+            </p>
+          )}
+          {section === 'calendar' && <CalendarView onOpen={openSection} />}
+          {section === 'customer-worktray' && (
+            <CustomerWorktray
+              onOpen={openSection}
+              phoneEnabled={Boolean(phoneAddon)}
+            />
+          )}
+          {section === 'dashboard' && (
+            <DashboardView
+              onOpen={openSection}
+              onCreateContact={() => quickCreate('contacts')}
+            />
+          )}
+          {section === 'settings' && <SettingsView onOpen={openSection} />}
+          {section === 'ai' && <AiView />}
+          {section === 'support' && <SupportView />}
+          {section === 'addon-store' && (
+            <AddonsView
+              addons={addons.addons}
+              ready={addons.ready}
+              error={addons.error}
+              actions={addons}
+              onOpen={openAddon}
+            />
+          )}
+          {section.startsWith('addon:') && addons.addons.some((addon) => addon.installed && addon.widget === 'invoice-builder' && `addon:${addon.id}` === section) && (
+            <InvoiceBuilder />
+          )}
+          {section.startsWith('addon:') && addons.addons.some((addon) => addon.installed && !addon.widget && `addon:${addon.id}` === section) && (
+            <AddonScreen addon={addons.addons.find((addon) => `addon:${addon.id}` === section)!} />
+          )}
+          {canAccessModule(moduleById(section), isAdmin) && (
+            <ModuleView
+              key={section}
+              moduleId={section}
+              openCreateToken={createRequest?.id === section ? createRequest.token : 0}
+              createDefaults={createRequest?.id === section ? createRequest.defaults : undefined}
+              externalQuery={headerQuery}
+              onOpenModule={openSection}
+              onQueryChange={setHeaderQuery}
+            />
+          )}
+          {moduleById(section) && !canAccessModule(moduleById(section), isAdmin) && (
+            <section className="glass-card rounded-2xl p-6 text-sm text-red-700">
+              این بخش فقط برای مدیر سیستم در دسترس است.
+            </section>
+          )}
+        </div>
+      </main>
+      {phoneAddon && (
+        <Softphone
+          open={phoneOpen}
+          onOpenChange={setPhoneOpen}
+          onUnknownCaller={(number) => {
+            quickCreate('contacts', {
+              phone_mobile: number,
+              description: `ثبت سریع از تماس ورودی ${number}`,
+            })
+          }}
+        />
+      )}
+    </div>
+  )
+}

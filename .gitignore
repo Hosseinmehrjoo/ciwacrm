@@ -1,0 +1,36 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Core runtime, install output, and credentials
+core/config.php
+core/config_override.php
+core/config_si.php
+core/.htaccess
+core/cache/
+core/upload/
+core/vendor/
+core/custom/
+core/*.log
+core/Api/V8/OAuth2/private.key
+core/Api/V8/OAuth2/public.key
+
+# Installed addon state and uploaded packages
+data/
+
+# Logs and OS/editor noise
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~

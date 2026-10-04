@@ -1,0 +1,11 @@
+{
+  "id": "ciwa-phone",
+  "name": "تلفن سازمانی",
+  "version": "1.0.0",
+  "description": "گوشی داخل برنامه هم‌خوان با CIWA Telecom: تنظیمات داخلی، تماس واقعی، مخاطبین مرکز تلفن و ظاهر آیفون.",
+  "navLabel": "تلفن",
+  "icon": "phone",
+  "widget": "softphone",
+  "recordLabel": "تماس",
+  "fields": []
+}
