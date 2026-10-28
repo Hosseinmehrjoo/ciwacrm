@@ -65,6 +65,15 @@ body::after {
   background: rgba(232, 121, 249, 0.65);
 }
 
+/* Leaflet map panes must stay LTR inside the RTL CRM shell. */
+.ciwa-map-host,
+.ciwa-map-host .leaflet-container,
+.ciwa-map-host .leaflet-pane,
+.ciwa-map-host .leaflet-control-container {
+  direction: ltr !important;
+  text-align: left;
+}
+
 .glass-card,
 .glass-sidebar,
 .glass-bar,

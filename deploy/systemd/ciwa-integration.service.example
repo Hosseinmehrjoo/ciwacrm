@@ -1,0 +1,17 @@
+[Unit]
+Description=CIWA CRM Integration
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=DEPLOY_USER
+WorkingDirectory=/home/DEPLOY_USER/crm.ciwa.ir
+EnvironmentFile=/home/DEPLOY_USER/crm.ciwa.ir/.env
+Environment=PORT=8787
+ExecStart=/usr/bin/node integration/server.mjs
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

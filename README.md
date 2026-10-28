@@ -118,6 +118,19 @@ cd frontend && pnpm install && pnpm dev
 
 رابط CIWA روی `http://localhost:8443` باز می‌شود.
 
+## نصب روی سرور اوبونتو
+
+راهنمای کامل: [`docs/install-ubuntu.md`](docs/install-ubuntu.md)
+
+خلاصه بعد از کپی پروژه و پر کردن `.env`:
+
+```bash
+chmod +x deploy/bootstrap-server.sh
+./deploy/bootstrap-server.sh
+```
+
+این اسکریپت هسته و دیتابیس را با Docker بالا می‌آورد، فرانت را بیلد می‌کند و سرویس‌های systemd میان‌افزار و رابط را نصب می‌کند.
+
 ## مجوز
 
 کل این پروژه، از جمله رابط CIWA و میان‌افزار، تحت **GNU Affero General Public License v3** است. متن مجوز هسته در [`core/LICENSE.txt`](core/LICENSE.txt) است.

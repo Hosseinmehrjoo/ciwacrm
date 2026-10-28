@@ -14,6 +14,7 @@ import { SupportView } from './views/SupportView'
 import { CalendarView } from './views/CalendarView'
 import { CustomerWorktray } from './views/CustomerWorktray'
 import { InvoiceBuilder } from './views/InvoiceBuilder'
+import { MapLeads } from './widgets/MapLeads'
 import { BusyIndicator, LoadingMark } from './ui/LoadingMark'
 import {
   LayoutDashboard, Users, TrendingUp, Ticket, Megaphone,
@@ -608,6 +609,9 @@ function CrmShell() {
           )}
           {section.startsWith('addon:') && addons.addons.some((addon) => addon.installed && addon.widget === 'invoice-builder' && `addon:${addon.id}` === section) && (
             <InvoiceBuilder />
+          )}
+          {section.startsWith('addon:') && addons.addons.some((addon) => addon.installed && addon.widget === 'map-leads' && `addon:${addon.id}` === section) && (
+            <MapLeads />
           )}
           {section.startsWith('addon:') && addons.addons.some((addon) => addon.installed && !addon.widget && `addon:${addon.id}` === section) && (
             <AddonScreen addon={addons.addons.find((addon) => `addon:${addon.id}` === section)!} />

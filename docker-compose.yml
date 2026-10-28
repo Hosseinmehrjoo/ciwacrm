@@ -1,6 +1,7 @@
 services:
   db:
     image: public.ecr.aws/docker/library/mariadb:11
+    restart: unless-stopped
     environment:
       MARIADB_DATABASE: ${CIWA_DB_NAME:-ciwa}
       MARIADB_USER: ${CIWA_DB_USER:-ciwa}
@@ -16,6 +17,7 @@ services:
 
   crm:
     build: ./deploy/core
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
@@ -40,6 +42,7 @@ services:
   integration:
     profiles: ['container']
     image: node:22-alpine
+    restart: unless-stopped
     working_dir: /app
     command: node server.mjs
     depends_on:
@@ -49,6 +52,7 @@ services:
       CIWA_CORE_URL: http://crm
       CIWA_CLIENT_ID: ${CIWA_CLIENT_ID:?set CIWA_CLIENT_ID}
       CIWA_CLIENT_SECRET: ${CIWA_CLIENT_SECRET:?set CIWA_CLIENT_SECRET}
+      CIWA_COOKIE_SECURE: ${CIWA_COOKIE_SECURE:-0}
     volumes:
       - ./integration:/app
     ports:
@@ -57,8 +61,9 @@ services:
   frontend:
     profiles: ['container']
     image: node:22-alpine
+    restart: unless-stopped
     working_dir: /app
-    command: sh -c "corepack enable && corepack prepare pnpm@10.34.3 --activate && pnpm install && pnpm dev --host 0.0.0.0 --port 8443"
+    command: sh -c "corepack enable && corepack prepare pnpm@10.34.3 --activate && pnpm install && pnpm build && pnpm preview --host 0.0.0.0 --port 8443"
     depends_on:
       - integration
     environment:

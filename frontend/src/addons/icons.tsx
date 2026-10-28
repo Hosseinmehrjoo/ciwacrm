@@ -1,4 +1,4 @@
-import { Award, ClipboardList, Package, Phone, Puzzle, Receipt, Sparkles, Star, type LucideIcon } from 'lucide-react'
+import { Award, ClipboardList, MapPinned, Package, Phone, Puzzle, Receipt, Sparkles, Star, type LucideIcon } from 'lucide-react'
 
 const icons: Record<string, LucideIcon> = {
   sparkles: Sparkles,
@@ -9,6 +9,7 @@ const icons: Record<string, LucideIcon> = {
   star: Star,
   phone: Phone,
   receipt: Receipt,
+  map: MapPinned,
 }
 
 export function addonIcon(name: string) {

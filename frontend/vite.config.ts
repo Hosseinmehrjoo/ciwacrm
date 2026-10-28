@@ -5,6 +5,10 @@ import path from 'node:path'
 
 import siteConfiguration from './.figma/make/site.json'
 
+function parseAllowedHosts(value: string | undefined): true | string[] {
+  if (!value || value.trim() === '' || value.trim() === '*') return true
+  return value.split(',').map((h) => h.trim()).filter(Boolean)
+}
 
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -49,17 +53,9 @@ react(),
     preview: {
       host: process.env.FIGMA_DEV_SERVER_HOST || '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
-      allowedHosts: [
-        'kojaberamm.ir',
-        'www.kojaberamm.ir',
-        'crm.kojaberamm.ir',
-        'kojaberimm.ir',
-        'www.kojaberimm.ir',
-        'crm.kojaberimm.ir',
-        '.kojaberamm.ir',
-        '.kojaberimm.ir',
-        'localhost',
-      ],
+      // Allow any host on production servers (domain / IP). Override with
+      // CIWA_ALLOWED_HOSTS=example.com,.example.com if you need a whitelist.
+      allowedHosts: parseAllowedHosts(process.env.CIWA_ALLOWED_HOSTS),
       proxy: {
         '/api': {
           target: process.env.CIWA_INTEGRATION_URL || 'http://127.0.0.1:8787',

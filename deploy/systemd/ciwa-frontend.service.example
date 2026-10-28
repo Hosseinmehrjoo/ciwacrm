@@ -1,0 +1,17 @@
+[Unit]
+Description=CIWA CRM Frontend
+After=network.target ciwa-integration.service
+Requires=ciwa-integration.service
+
+[Service]
+Type=simple
+User=DEPLOY_USER
+WorkingDirectory=/home/DEPLOY_USER/crm.ciwa.ir/frontend
+Environment=PORT=8443
+Environment=CIWA_INTEGRATION_URL=http://127.0.0.1:8787
+ExecStart=/usr/bin/pnpm preview --host 0.0.0.0 --port 8443
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
